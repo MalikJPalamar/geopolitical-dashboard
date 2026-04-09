@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Iran War Intelligence Dashboard — Standalone Preview</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: #03050c; min-height: 100vh; font-family: -apple-system, system-ui, sans-serif; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: #03050c; }
+    ::-webkit-scrollbar-thumb { background: #1e3050; border-radius: 2px; }
+    @keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    @keyframes shimmer { 0%,100%{opacity:0.4} 50%{opacity:0.7} }
+    button:not(:disabled):hover { filter: brightness(1.15); }
+    #boot { color:#6b8ea8; font-family: monospace; font-size: 12px; padding: 24px; }
+  </style>
+
+  <!-- CDN deps: React 18, Recharts 2, Babel standalone for in-browser JSX -->
+  <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+  <script crossorigin src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"><div id="boot">Loading dashboard... (compiling JSX in browser, ~1s)</div></div>
+
+  <script type="text/babel" data-presets="react">
+/* ------------------------------------------------------------------ */
+/*  Iran War Intelligence Dashboard — standalone single-file preview  */
+/*  Mirrors src/App.jsx but with all deps from CDN and baseline only. */
+/*  Live Yahoo / Claude API calls require the Express backend.        */
+/* ------------------------------------------------------------------ */
+
+const { useState, useCallback, useEffect } = React;
+const {
+  LineChart, Line, AreaChart, Area,
+  XAxis, YAxis, ResponsiveContainer, Tooltip,
+} = Recharts;
+
+/* ── colour tokens ───────────────────────────────────────────── */
+const C = {
+  bg:       '#03050c',
+  surface:  '#070d1b',
+  surfaceHi:'#0c1528',
+  border:   '#142035',
+  borderHi: '#1e3554',
+  amber:    '#f59e0b',
+  red:      '#fb3759',
+  green:    '#00dba8',
+  blue:     '#4db5ff',
+  purple:   '#a78bfa',
+  muted:    '#1e3050',
+  textDim:  '#3d5570',
+  text:     '#6b8ea8',
+  bright:   '#adc8e0',
+  white:    '#e2f0ff',
+};
+
+/* ── baseline snapshot (Apr 9, 2026, post-ceasefire) ─────────── */
+const B = {
+  brent: 96.80, wti: 93.40, gold: 3095, vix: 27.8,
+  bdi: 2710, ttf: 56.40, usdeur: 0.918,
+  spain_diesel: 1.89, spain_petrol95: 1.68,
+  hormuz_open: true, war_risk_pct: 3.8,
+  brent_pct: 33, wti_pct: 35, gold_pct: 10, vix_pct: 60,
+  ita_pct: 19, xle_pct: 18, icln_pct: 11, jets_pct: -18,
+  conflict_day: 40,
+};
+
+const OIL_HISTORY = [
+  { d:'Feb 27', brent:73,  wti:69  },
+  { d:'Mar 1',  brent:87,  wti:83  },
+  { d:'Mar 5',  brent:99,  wti:95  },
+  { d:'Mar 8',  brent:107, wti:103 },
+  { d:'Mar 18', brent:111, wti:107 },
+  { d:'Apr 1',  brent:112, wti:108 },
+  { d:'Apr 7',  brent:110, wti:106 },
+  { d:'Apr 8',  brent:97,  wti:93  },
+  { d:'Apr 9',  brent:97,  wti:93  },
+];
+const FUEL_HISTORY = [
+  { d:'Feb 11', p95:1.46, diesel:1.48 },
+  { d:'Feb 25', p95:1.46, diesel:1.48 },
+  { d:'Mar 5',  p95:1.56, diesel:1.64 },
+  { d:'Mar 9',  p95:1.60, diesel:1.79 },
+  { d:'Mar 18', p95:1.68, diesel:1.89 },
+  { d:'Mar 25', p95:1.72, diesel:1.93 },
+  { d:'Apr 9',  p95:1.72, diesel:1.93 },
+];
+const STOCK_HISTORY = [
+  { d:'Feb 27', def:100, energy:100, renew:100, air:100, ship:100 },
+  { d:'Mar 8',  def:116, energy:128, renew:105, air:79,  ship:128 },
+  { d:'Mar 18', def:123, energy:132, renew:109, air:71,  ship:142 },
+  { d:'Apr 8',  def:119, energy:118, renew:113, air:82,  ship:131 },
+];
+
+/* ── helpers ─────────────────────────────────────────────────── */
+const val    = (live, key) => live?.[key] ?? B[key];
+const isLv   = (live, key) => !!(live?._liveKeys?.includes(key));
+const pctStr = (n) => {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '—';
+  return `${v > 0 ? '+' : ''}${v}%`;
+};
+
+/* ── UI primitives ───────────────────────────────────────────── */
+const Card = ({ children, style = {} }) => (
+  <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3, padding: 16, ...style }}>
+    {children}
+  </div>
+);
+const Lbl = ({ children, color }) => (
+  <div style={{ fontSize: 9, letterSpacing: '0.2em', color: color || C.textDim, fontFamily: 'monospace', textTransform: 'uppercase', marginBottom: 6 }}>
+    {children}
+  </div>
+);
+const Badge = ({ label, color = C.amber }) => (
+  <span style={{ padding: '2px 7px', background: color + '18', border: `1px solid ${color}35`, color, borderRadius: 2, fontSize: 10, fontFamily: 'monospace', fontWeight: 700 }}>
+    {label}
+  </span>
+);
+const Dot = ({ live }) => (
+  <span
+    title={live ? 'Live from Yahoo Finance' : 'Baseline snapshot'}
+    style={{ fontSize: 8, color: live ? C.green : C.textDim, marginLeft: 4, animation: live ? 'pulse 2s infinite' : 'none' }}
+  >{live ? '●' : '○'}</span>
+);
+const Skel = ({ w = '70%', h = 24 }) => (
+  <div style={{ width: w, height: h, background: C.muted + '40', borderRadius: 2, animation: 'shimmer 1.5s infinite' }} />
+);
+const MiniArea = ({ data, dataKey, color, height = 70 }) => (
+  <ResponsiveContainer width="100%" height={height}>
+    <AreaChart data={data} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
+      <defs>
+        <linearGradient id={`g_${dataKey}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="5%"  stopColor={color} stopOpacity={0.3} />
+          <stop offset="95%" stopColor={color} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <Area type="monotone" dataKey={dataKey} stroke={color} strokeWidth={1.5} fill={`url(#g_${dataKey})`} dot={false} />
+      <Tooltip contentStyle={{ background: C.surfaceHi, border: `1px solid ${C.borderHi}`, fontSize: 10, fontFamily: 'monospace' }} itemStyle={{ color }} labelStyle={{ color: C.text }} />
+    </AreaChart>
+  </ResponsiveContainer>
+);
+const MarkdownView = ({ text }) => (
+  <div style={{ padding: 4 }}>
+    {text.split('\n').map((line, i) => {
+      if (line.startsWith('## '))
+        return <div key={i} style={{ fontSize: 12, color: C.amber, fontFamily: 'monospace', fontWeight: 700, marginTop: 18, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{line.slice(3)}</div>;
+      if (/^\*\*.*\*\*$/.test(line))
+        return <div key={i} style={{ fontSize: 11, color: C.bright, fontFamily: 'monospace', fontWeight: 700, marginBottom: 3 }}>{line.replace(/\*\*/g, '')}</div>;
+      if (line.startsWith('- '))
+        return <div key={i} style={{ fontSize: 11, color: C.text, fontFamily: 'monospace', marginBottom: 4, paddingLeft: 10 }}>› {line.slice(2)}</div>;
+      if (!line.trim())
+        return <div key={i} style={{ height: 5 }} />;
+      return <div key={i} style={{ fontSize: 11, color: C.text, fontFamily: 'monospace', lineHeight: 1.75, marginBottom: 3 }}>{line}</div>;
+    })}
+  </div>
+);
+
+/* ── tabs ────────────────────────────────────────────────────── */
+function OverviewTab({ live, loading }) {
+  return (
+    <div>
+      <div style={{ background: C.green + '10', border: `1px solid ${C.green}30`, borderRadius: 3, padding: '10px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <span style={{ color: C.green, fontSize: 10, fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.15em' }}>◉ CEASEFIRE IN EFFECT</span>
+        <span style={{ color: C.bright, fontSize: 10, fontFamily: 'monospace' }}>2-week truce signed Apr 8 · Hormuz reopening · Islamabad talks Apr 10 · Lebanon still active</span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 14 }}>
+        {[
+          { label: 'Conflict Day',   v: `DAY ${val(live,'conflict_day')}`,                                                    sub: 'Ceasefire since Apr 8',                      col: C.amber },
+          { label: 'Brent Crude',    v: loading ? null : `$${val(live,'brent')}`,                                             sub: `${pctStr(val(live,'brent_pct'))} vs Feb 27`, col: C.green, k: 'brent' },
+          { label: 'Spain Diesel',   v: loading ? null : `€${val(live,'spain_diesel')}/L`,                                    sub: 'Pump lags 3 weeks',                          col: C.amber, k: 'spain_diesel' },
+          { label: 'Hormuz',         v: val(live,'hormuz_open') ? 'REOPENING' : 'CLOSED',                                     sub: 'Ceasefire condition',                        col: val(live,'hormuz_open') ? C.green : C.red },
+          { label: 'Total Killed',   v: '3,400+',                                                                             sub: 'HRANA est. at ceasefire',                    col: C.red },
+          { label: 'Displaced',      v: '800K+',                                                                              sub: 'Lebanon + Iran combined',                    col: C.red },
+          { label: 'VIX Fear Index', v: loading ? null : `${val(live,'vix')}`,                                                sub: '▼ Easing on ceasefire',                      col: C.amber, k: 'vix' },
+          { label: 'Defense ETF',    v: loading ? null : pctStr(val(live,'ita_pct')),                                         sub: 'Pulling back on peace',                      col: C.blue,  k: 'ita_pct' },
+        ].map((m, i) => (
+          <Card key={i} style={{ padding: '12px 14px' }}>
+            <Lbl>{m.label}</Lbl>
+            {m.v === null ? <Skel h={26} /> : (
+              <div style={{ display: 'flex', alignItems: 'baseline' }}>
+                <span style={{ fontSize: 20, fontWeight: 700, color: m.col, fontFamily: 'monospace' }}>{m.v}</span>
+                {m.k && <Dot live={isLv(live, m.k)} />}
+              </div>
+            )}
+            <div style={{ fontSize: 10, color: C.text, marginTop: 5, fontFamily: 'monospace' }}>{m.sub}</div>
+          </Card>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <Card>
+          <Lbl>Brent Crude — Conflict Arc + Ceasefire Drop Apr 8</Lbl>
+          <div style={{ fontSize: 22, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>
+            ${val(live,'brent')} <span style={{ fontSize: 12, color: C.green }}>▼ ceasefire</span>
+          </div>
+          <div style={{ marginTop: 10 }}><MiniArea data={OIL_HISTORY} dataKey="brent" color={C.amber} height={90} /></div>
+        </Card>
+        <Card>
+          <Lbl>Spain Pump Prices €/L — Still at Peak (Wholesale Lag)</Lbl>
+          <div style={{ fontSize: 22, fontWeight: 700, color: C.amber, fontFamily: 'monospace' }}>
+            €{val(live,'spain_diesel')} <span style={{ fontSize: 12, color: C.text }}>easing in ~3 weeks</span>
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <ResponsiveContainer width="100%" height={90}>
+              <LineChart data={FUEL_HISTORY} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
+                <Line type="monotone" dataKey="diesel" stroke={C.amber} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="p95"    stroke={C.blue}  strokeWidth={2} dot={false} />
+                <XAxis dataKey="d" tick={{ fill: C.textDim, fontSize: 9, fontFamily: 'monospace' }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: C.surfaceHi, border: `1px solid ${C.borderHi}`, fontSize: 10, fontFamily: 'monospace' }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function MarketsTab({ live, loading }) {
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 12 }}>
+        {[
+          { label: 'VIX Fear Index',    v: loading ? null : `${val(live,'vix')}`,         k: 'vix',      col: C.amber, delta: '▼ Easing on ceasefire'   },
+          { label: 'Gold Spot',         v: loading ? null : `$${val(live,'gold')}`,       k: 'gold',     col: C.amber, delta: 'Safe haven easing'        },
+          { label: 'USD/EUR',           v: loading ? null : `${val(live,'usdeur')}`,      k: 'usdeur',   col: C.amber, delta: 'Normalising'              },
+          { label: 'S&P 500',           v: '+2.1%',                                       k: null,       col: C.green, delta: 'Ceasefire rally'          },
+          { label: 'Defense ETF (ITA)', v: loading ? null : pctStr(val(live,'ita_pct')),  k: 'ita_pct',  col: C.blue,  delta: 'Pulling back on peace'    },
+          { label: 'Energy ETF (XLE)',  v: loading ? null : pctStr(val(live,'xle_pct')),  k: 'xle_pct',  col: C.amber, delta: 'Down from +32% war peak'  },
+          { label: 'Renewables (ICLN)', v: loading ? null : pctStr(val(live,'icln_pct')), k: 'icln_pct', col: C.green, delta: 'Structural gains holding' },
+          { label: 'Airlines (JETS)',   v: loading ? null : pctStr(val(live,'jets_pct')), k: 'jets_pct', col: C.amber, delta: 'Recovering on ceasefire'  },
+        ].map((m, i) => (
+          <Card key={i} style={{ padding: '12px 14px' }}>
+            <Lbl>{m.label}</Lbl>
+            {m.v === null ? <Skel h={26} /> : (
+              <div style={{ display: 'flex', alignItems: 'baseline' }}>
+                <span style={{ fontSize: 20, fontWeight: 700, color: m.col, fontFamily: 'monospace' }}>{m.v}</span>
+                {m.k && <Dot live={isLv(live, m.k)} />}
+              </div>
+            )}
+            <div style={{ fontSize: 10, color: C.text, fontFamily: 'monospace', marginTop: 5 }}>{m.delta}</div>
+          </Card>
+        ))}
+      </div>
+
+      <Card>
+        <Lbl>Sector Performance (Feb 27 = 100) — Ceasefire reversal visible Apr 8</Lbl>
+        <ResponsiveContainer width="100%" height={220}>
+          <LineChart data={STOCK_HISTORY} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+            <XAxis dataKey="d" tick={{ fill: C.textDim, fontSize: 9, fontFamily: 'monospace' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: C.textDim, fontSize: 9, fontFamily: 'monospace' }} axisLine={false} tickLine={false} domain={[60, 150]} />
+            <Tooltip contentStyle={{ background: C.surfaceHi, border: `1px solid ${C.borderHi}`, fontSize: 10, fontFamily: 'monospace' }} />
+            <Line type="monotone" dataKey="def"    stroke={C.blue}   strokeWidth={2} dot={false} name="Defense" />
+            <Line type="monotone" dataKey="energy" stroke={C.amber}  strokeWidth={2} dot={false} name="Energy" />
+            <Line type="monotone" dataKey="renew"  stroke={C.green}  strokeWidth={2} dot={false} name="Renewables" />
+            <Line type="monotone" dataKey="air"    stroke={C.red}    strokeWidth={2} dot={false} name="Airlines" />
+            <Line type="monotone" dataKey="ship"   stroke={C.purple} strokeWidth={2} dot={false} name="Shipping" />
+          </LineChart>
+        </ResponsiveContainer>
+        <div style={{ display: 'flex', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
+          {[['Defense', C.blue], ['Energy', C.amber], ['Renewables', C.green], ['Airlines', C.red], ['Shipping', C.purple]].map(([n, c]) => (
+            <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 16, height: 2, background: c }} />
+              <span style={{ fontSize: 9, color: C.text, fontFamily: 'monospace' }}>{n}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* News and Digest need the backend. Show a clear notice. */
+function BackendRequiredCard({ title, description }) {
+  return (
+    <Card style={{ padding: 40, textAlign: 'center' }}>
+      <div style={{ fontSize: 28, color: C.amber, marginBottom: 14 }}>◆</div>
+      <div style={{ fontSize: 12, color: C.bright, fontFamily: 'monospace', fontWeight: 700, marginBottom: 8, letterSpacing: '0.1em' }}>{title}</div>
+      <div style={{ fontSize: 11, color: C.text, fontFamily: 'monospace', lineHeight: 1.7, maxWidth: 560, margin: '0 auto' }}>
+        {description}
+      </div>
+      <div style={{ marginTop: 16, fontSize: 10, color: C.textDim, fontFamily: 'monospace' }}>
+        To enable: <span style={{ color: C.amber }}>npm install &amp;&amp; npm run dev</span>, then open <span style={{ color: C.amber }}>http://localhost:5173</span>
+      </div>
+    </Card>
+  );
+}
+
+function NewsTab() {
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: C.bright, fontFamily: 'monospace', fontWeight: 700, marginBottom: 4 }}>Live Intelligence Feed</div>
+      <div style={{ fontSize: 10, color: C.textDim, fontFamily: 'monospace', marginBottom: 16 }}>Claude + web search · requires Express backend</div>
+      <BackendRequiredCard
+        title="BACKEND REQUIRED"
+        description="The news feed pulls live headlines via the Anthropic API with web search. This requires the server process in server/index.js (it holds the API key and routes the call). This standalone preview runs in the browser only." />
+    </div>
+  );
+}
+
+function DigestTab() {
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: C.bright, fontFamily: 'monospace', fontWeight: 700, marginBottom: 4 }}>◆ AI Intelligence Digest</div>
+      <div style={{ fontSize: 10, color: C.textDim, fontFamily: 'monospace', marginBottom: 16 }}>Claude-generated briefing · requires Express backend</div>
+      <BackendRequiredCard
+        title="BACKEND REQUIRED"
+        description="The digest is generated by Claude (claude-sonnet-4-6) server-side so the API key stays out of the browser. Start the Express server to enable this tab." />
+    </div>
+  );
+}
+
+/* ── main shell ──────────────────────────────────────────────── */
+const TABS = [
+  { id: 'overview', label: 'OVERVIEW' },
+  { id: 'markets',  label: 'MARKETS' },
+  { id: 'news',     label: '⟳ NEWS' },
+  { id: 'digest',   label: '◆ DIGEST' },
+];
+
+function App() {
+  const [tab, setTab] = useState('overview');
+  // Standalone: no live data, always use baseline. `live` stays null.
+  const live = null;
+  const loading = false;
+
+  const content = {
+    overview: <OverviewTab live={live} loading={loading} />,
+    markets:  <MarketsTab  live={live} loading={loading} />,
+    news:     <NewsTab />,
+    digest:   <DigestTab />,
+  };
+
+  return (
+    <div style={{ background: C.bg, minHeight: '100vh', color: C.text }}>
+      {/* header */}
+      <div style={{ borderBottom: `1px solid ${C.border}`, padding: '11px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.white, letterSpacing: '0.25em', fontFamily: 'monospace' }}>IRAN WAR INTEL</span>
+          <span style={{ fontSize: 10, padding: '2px 8px', background: C.green + '20', border: `1px solid ${C.green}40`, color: C.green, borderRadius: 2, fontFamily: 'monospace', fontWeight: 700 }}>DAY 40 · CEASEFIRE</span>
+          <span style={{ fontSize: 9, color: C.textDim, fontFamily: 'monospace' }}>APR 9 BASELINE · standalone preview</span>
+        </div>
+        <div style={{ display: 'flex', gap: 18, fontSize: 11, fontFamily: 'monospace', flexWrap: 'wrap' }}>
+          <span>BRENT <span style={{ color: C.green }}>${val(live,'brent')}</span></span>
+          <span>DIESEL <span style={{ color: C.amber }}>€{val(live,'spain_diesel')}</span></span>
+          <span>HORMUZ <span style={{ color: val(live,'hormuz_open') ? C.green : C.red }}>{val(live,'hormuz_open') ? 'REOPENING' : 'CLOSED'}</span></span>
+          <span>VIX <span style={{ color: C.amber }}>{val(live,'vix')}</span></span>
+        </div>
+      </div>
+
+      {/* standalone-mode banner */}
+      <div style={{ background: C.amber + '10', borderBottom: `1px solid ${C.amber}25`, padding: '7px 24px', fontSize: 10, color: C.amber, fontFamily: 'monospace' }}>
+        ⚠ Standalone preview — baseline data only. Live Yahoo Finance, news feed and AI digest require the Express backend (npm run dev).
+      </div>
+
+      {/* tabs */}
+      <div style={{ borderBottom: `1px solid ${C.border}`, padding: '0 24px', display: 'flex', overflowX: 'auto' }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{ padding: '10px 14px', background: 'none', border: 'none', borderBottom: tab === t.id ? `2px solid ${C.amber}` : '2px solid transparent', color: tab === t.id ? C.amber : C.textDim, fontFamily: 'monospace', fontSize: 10, fontWeight: tab === t.id ? 700 : 400, cursor: 'pointer', letterSpacing: '0.15em', whiteSpace: 'nowrap' }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ padding: '20px 24px', maxWidth: 1400, margin: '0 auto' }}>
+        {content[tab]}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
