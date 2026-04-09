@@ -30,7 +30,11 @@ export const BASELINE = {
   hormuz_open:   true,   // reopening per ceasefire terms
   war_risk_pct:  3.8,    // down from 6.8% war peak
 
-  // ETF % changes since Feb 27, 2026 (conflict start)
+  // % changes since Feb 27, 2026 (conflict start)
+  brent_pct: 33,   // Brent crude — +33% at ceasefire day
+  wti_pct:   35,   // WTI crude
+  gold_pct:  10,   // Gold safe-haven bid
+  vix_pct:   60,   // VIX spike (vs ~17 baseline)
   ita_pct:   19,   // iShares Aerospace & Defense
   xle_pct:   18,   // Energy Select Sector
   icln_pct:  11,   // iShares Global Clean Energy
