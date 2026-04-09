@@ -1,0 +1,30 @@
+[Unit]
+Description=Geopolitical Intelligence Dashboard
+Documentation=https://github.com/MalikJPalamar/geopolitical-dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/geopolitical-lens
+Environment="NODE_ENV=production"
+Environment="PORT=3001"
+Environment="BASE_PATH=/geopolitical-lens"
+EnvironmentFile=/var/www/geopolitical-lens/.env
+ExecStart=/usr/bin/node server/index.js
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=geopolitical-lens
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/geopolitical-lens
+
+[Install]
+WantedBy=multi-user.target

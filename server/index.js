@@ -12,11 +12,17 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import Anthropic from '@anthropic-ai/sdk'
 import axios from 'axios'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
 dotenv.config()
 
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
 const app = express()
 const PORT = process.env.PORT || 3001
+const BASE_PATH = process.env.BASE_PATH || ''
 
 // ── Anthropic client (server-side only) ────────────────────────
 const anthropic = new Anthropic({
@@ -263,3 +269,20 @@ app.listen(PORT, () => {
   console.log(`   Model: ${MODEL}`)
   console.log(`   Anthropic key: ${process.env.ANTHROPIC_API_KEY ? '✓ found' : '✗ MISSING — set ANTHROPIC_API_KEY in .env'}\n`)
 })
+
+// ─────────────────────────────────────────────────────────────
+// PRODUCTION: Serve static files from /dist
+// ─────────────────────────────────────────────────────────────
+if (process.env.NODE_ENV === 'production') {
+  const distPath = path.join(__dirname, '../dist')
+  
+  // Serve static assets
+  app.use(BASE_PATH, express.static(distPath))
+  
+  // Handle SPA routing - send all non-API routes to index.html
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+      res.sendFile(path.join(distPath, 'index.html'))
+    }
+  })
+}

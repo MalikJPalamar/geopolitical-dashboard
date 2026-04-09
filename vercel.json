@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "name": "geopolitical-lens",
+  "builds": [
+    {
+      "src": "server/index.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/geopolitical-lens/api/(.*)",
+      "dest": "/server/index.js"
+    },
+    {
+      "src": "/geopolitical-lens/(.*)",
+      "dest": "/dist/$1"
+    },
+    {
+      "src": "/geopolitical-lens",
+      "dest": "/dist/index.html"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production",
+    "BASE_PATH": "/geopolitical-lens"
+  }
+}
