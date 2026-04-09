@@ -120,6 +120,44 @@ app.get('/api/market', async (req, res) => {
 })
 
 // ─────────────────────────────────────────────────────────────
+// Helpers for parsing Claude responses that may interleave tool
+// calls, tool results, and text blocks when using web_search.
+// ─────────────────────────────────────────────────────────────
+function joinText(content) {
+  if (!Array.isArray(content)) return ''
+  return content
+    .filter(b => b && b.type === 'text' && typeof b.text === 'string')
+    .map(b => b.text)
+    .join('\n')
+    .trim()
+}
+
+function extractJsonArray(raw) {
+  if (!raw) return null
+  // Strip markdown code fences if present
+  const clean = raw.replace(/```(?:json|javascript|js)?\s*/gi, '').replace(/```/g, '').trim()
+  // Prefer a bare array
+  const aStart = clean.indexOf('[')
+  const aEnd   = clean.lastIndexOf(']')
+  if (aStart !== -1 && aEnd !== -1 && aEnd > aStart) {
+    try { return JSON.parse(clean.slice(aStart, aEnd + 1)) } catch {}
+  }
+  // Fall back: { items: [...] } or { data: [...] } or { results: [...] }
+  const oStart = clean.indexOf('{')
+  const oEnd   = clean.lastIndexOf('}')
+  if (oStart !== -1 && oEnd !== -1 && oEnd > oStart) {
+    try {
+      const obj = JSON.parse(clean.slice(oStart, oEnd + 1))
+      for (const k of ['items', 'data', 'results', 'headlines', 'news']) {
+        if (Array.isArray(obj?.[k])) return obj[k]
+      }
+      if (Array.isArray(obj)) return obj
+    } catch {}
+  }
+  return null
+}
+
+// ─────────────────────────────────────────────────────────────
 // ROUTE: POST /api/news
 // Calls Claude with web_search to fetch today's top conflict headlines
 // ─────────────────────────────────────────────────────────────
@@ -129,35 +167,37 @@ app.post('/api/news', async (req, res) => {
   try {
     const response = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 1000,
-      system: 'Respond with ONLY a JSON array. Start with [ and end with ]. No markdown, no explanation.',
+      max_tokens: 4096,
+      system: 'You are a geopolitical news aggregator. Use web_search to find today\'s headlines, then respond with ONLY a JSON array. Start your final message with [ and end with ]. No markdown code fences, no explanation, no preamble.',
       messages: [{
         role: 'user',
-        content: `Search for the 8 most significant developments today (${today}) across:
+        content: `Search the web for the 8 most significant developments today (${today}) across:
 - US-Iran ceasefire status and Islamabad talks
 - Strait of Hormuz shipping
 - Energy prices and markets
 - Lebanon conflict
 - Diplomatic developments
 
-Return ONLY this JSON array:
+After searching, respond with ONLY this JSON array (no other text):
 [{"time":"HH:MM","headline":"factual headline under 85 chars","source":"outlet name","category":"MILITARY|ENERGY|DIPLOMATIC|MARKETS|HUMANITARIAN","severity":"CRITICAL|HIGH|MEDIUM|LOW"}]`,
       }],
       tools: [{ type: 'web_search_20250305', name: 'web_search' }],
     })
 
-    const textBlock = response.content.filter(b => b.type === 'text').pop()
-    if (!textBlock) throw new Error('No text in Claude response')
+    const raw = joinText(response.content)
+    if (!raw) {
+      throw new Error(`Claude returned no text (stop_reason=${response.stop_reason}). Check web_search tool access and max_tokens.`)
+    }
 
-    const raw = textBlock.text.replace(/```[a-z]*\s*/gi, '').replace(/```/g, '').trim()
-    const start = raw.indexOf('[')
-    const end   = raw.lastIndexOf(']')
-    if (start === -1 || end === -1) throw new Error(`No array found. Got: ${raw.slice(0, 100)}`)
+    const items = extractJsonArray(raw)
+    if (!items) {
+      throw new Error(`Could not extract JSON array from response. First 200 chars: ${raw.slice(0, 200)}`)
+    }
 
-    const items = JSON.parse(raw.slice(start, end + 1))
     res.json({ items })
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    console.error('[/api/news]', e)
+    res.status(500).json({ error: e.message || 'Unknown error' })
   }
 })
 
@@ -166,27 +206,33 @@ Return ONLY this JSON array:
 // Generates an AI intelligence digest using live market data + web search
 // Body: { marketData: { brent, wti, vix, ... } }
 // ─────────────────────────────────────────────────────────────
+const sign = (n, fallback) => {
+  const v = Number(n ?? fallback)
+  return `${v > 0 ? '+' : ''}${v}`
+}
+
 app.post('/api/digest', async (req, res) => {
   const d = req.body?.marketData || {}
+  const hormuzOpen = d.hormuz_open !== undefined ? !!d.hormuz_open : true
 
   try {
     const response = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 1000,
-      system: 'Senior geopolitical and financial intelligence analyst. Write structured markdown briefings. Direct and analytical — no filler.',
+      max_tokens: 4096,
+      system: 'Senior geopolitical and financial intelligence analyst. Write structured markdown briefings using ## headers. Direct and analytical — no filler, no preamble.',
       messages: [{
         role: 'user',
         content: `Intelligence digest — US-Iran ceasefire, ${new Date().toLocaleDateString()}.
 
 CURRENT DATA:
 - Brent: $${d.brent ?? 96.80}/bbl | WTI: $${d.wti ?? 93.40}/bbl
-- Hormuz: ${d.hormuz_open ?? true ? 'REOPENING (ceasefire)' : 'CLOSED'}
+- Hormuz: ${hormuzOpen ? 'REOPENING (ceasefire)' : 'CLOSED'}
 - VIX: ${d.vix ?? 27.8} | Gold: $${d.gold ?? 3095}
-- Defense ETF: +${d.ita_pct ?? 19}% | Energy ETF: +${d.xle_pct ?? 18}% | Airlines: ${d.jets_pct ?? -18}%
+- Defense ETF: ${sign(d.ita_pct, 19)}% | Energy ETF: ${sign(d.xle_pct, 18)}% | Airlines: ${sign(d.jets_pct, -18)}%
 - Iran killed: ~3,400 (HRANA) | Lebanon: 1,500+
 - Islamabad talks underway
 
-Write using these ## headers:
+Write a briefing using these exact ## headers, in this order:
 ## Ceasefire Status
 ## Energy & Markets
 ## Business Impact
@@ -195,12 +241,15 @@ Write using these ## headers:
       tools: [{ type: 'web_search_20250305', name: 'web_search' }],
     })
 
-    const textBlock = response.content.filter(b => b.type === 'text').pop()
-    if (!textBlock) throw new Error('No text in Claude response')
+    const digest = joinText(response.content)
+    if (!digest) {
+      throw new Error(`Claude returned no text (stop_reason=${response.stop_reason}). Check web_search tool access and max_tokens.`)
+    }
 
-    res.json({ digest: textBlock.text })
+    res.json({ digest })
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    console.error('[/api/digest]', e)
+    res.status(500).json({ error: e.message || 'Unknown error' })
   }
 })
 

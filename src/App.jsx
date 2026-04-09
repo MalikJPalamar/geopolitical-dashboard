@@ -20,6 +20,12 @@ import { Card, Lbl, Badge, Dot, Skel, MiniArea, ProgBar, MarkdownView } from './
 // ─── helpers ────────────────────────────────────────────────
 const val  = (live, key) => live?.[key]             ?? B[key]
 const isLv = (live, key) => !!(live?._liveKeys?.includes(key))
+// Format a signed percent: +19%, -5%, 0%
+const pctStr = (n) => {
+  const v = Number(n)
+  if (!Number.isFinite(v)) return '—'
+  return `${v > 0 ? '+' : ''}${v}%`
+}
 
 // ─── OVERVIEW TAB ───────────────────────────────────────────
 function OverviewTab({ live, loading }) {
@@ -33,13 +39,13 @@ function OverviewTab({ live, loading }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 14 }}>
         {[
           { label: 'Conflict Day',   v: `DAY ${val(live,'conflict_day')}`,      sub: 'Ceasefire since Apr 8',        col: C.amber },
-          { label: 'Brent Crude',    v: loading ? null : `$${val(live,'brent')}`, sub: '▼ -13% on ceasefire',          col: C.green, k: 'brent'       },
+          { label: 'Brent Crude',    v: loading ? null : `$${val(live,'brent')}`, sub: `${pctStr(val(live,'brent_pct'))} vs Feb 27`, col: C.green, k: 'brent' },
           { label: 'Spain Diesel',   v: loading ? null : `€${val(live,'spain_diesel')}/L`, sub: 'Pump lags 3 weeks', col: C.amber, k: 'spain_diesel' },
           { label: 'Hormuz',         v: val(live,'hormuz_open') ? 'REOPENING' : 'CLOSED', sub: 'Ceasefire condition', col: val(live,'hormuz_open') ? C.green : C.red },
           { label: 'Total Killed',   v: '3,400+',                               sub: 'HRANA est. at ceasefire',      col: C.red   },
           { label: 'Displaced',      v: '800K+',                                sub: 'Lebanon + Iran combined',      col: C.red   },
           { label: 'VIX Fear Index', v: loading ? null : `${val(live,'vix')}`,  sub: '▼ Easing on ceasefire',        col: C.amber, k: 'vix'         },
-          { label: 'Defense ETF',    v: loading ? null : `+${val(live,'ita_pct')}%`, sub: 'Pulling back on peace',   col: C.blue,  k: 'ita_pct'     },
+          { label: 'Defense ETF',    v: loading ? null : pctStr(val(live,'ita_pct')), sub: 'Pulling back on peace',  col: C.blue,  k: 'ita_pct'     },
         ].map((m, i) => (
           <Card key={i} style={{ padding: '12px 14px' }}>
             <Lbl>{m.label}</Lbl>
@@ -91,12 +97,12 @@ function MarketsTab({ live, loading }) {
         {[
           { label: 'VIX Fear Index',    v: loading ? null : `${val(live,'vix')}`,          k: 'vix',      col: C.amber, delta: '▼ Easing on ceasefire'   },
           { label: 'Gold Spot',         v: loading ? null : `$${val(live,'gold')}`,         k: 'gold',     col: C.amber, delta: 'Safe haven easing'        },
-          { label: 'USD/EUR',           v: loading ? null : `${val(live,"usdeur')}`,        k: 'usdeur',   col: C.amber, delta: 'Normalising'               },
+          { label: 'USD/EUR',           v: loading ? null : `${val(live,'usdeur')}`,       k: 'usdeur',   col: C.amber, delta: 'Normalising'               },
           { label: 'S&P 500',           v: '+2.1%',                                         k: null,       col: C.green, delta: 'Ceasefire rally'           },
-          { label: 'Defense ETF (ITA)', v: loading ? null : `+${val(live,'ita_pct')}%`,    k: 'ita_pct',  col: C.blue,  delta: 'Pulling back on peace'     },
-          { label: 'Energy ETF (XLE)',  v: loading ? null : `+${val(live,'xle_pct')}%`,    k: 'xle_pct',  col: C.amber, delta: 'Down from +32% war peak'   },
-          { label: 'Renewables (ICLN)', v: loading ? null : `+${val(live,'icln_pct')}%`,   k: 'icln_pct', col: C.green, delta: 'Structural gains holding'  },
-          { label: 'Airlines (JETS)',   v: loading ? null : `${val(live,'jets_pct')}%`,     k: 'jets_pct', col: C.amber, delta: 'Recovering on ceasefire'   },
+          { label: 'Defense ETF (ITA)', v: loading ? null : pctStr(val(live,'ita_pct')),  k: 'ita_pct',  col: C.blue,  delta: 'Pulling back on peace'     },
+          { label: 'Energy ETF (XLE)',  v: loading ? null : pctStr(val(live,'xle_pct')),  k: 'xle_pct',  col: C.amber, delta: 'Down from +32% war peak'   },
+          { label: 'Renewables (ICLN)', v: loading ? null : pctStr(val(live,'icln_pct')), k: 'icln_pct', col: C.green, delta: 'Structural gains holding'  },
+          { label: 'Airlines (JETS)',   v: loading ? null : pctStr(val(live,'jets_pct')), k: 'jets_pct', col: C.amber, delta: 'Recovering on ceasefire'   },
         ].map((m, i) => (
           <Card key={i} style={{ padding: '12px 14px' }}>
             <Lbl>{m.label}</Lbl>
