@@ -6,7 +6,7 @@
   <title>Iran War Intelligence Dashboard — Standalone Preview</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { background: #03050c; min-height: 100vh; font-family: -apple-system, system-ui, sans-serif; }
+    html, body { background: #03050c; min-height: 100vh; font-family: -apple-system, system-ui, sans-serif; -webkit-text-size-adjust: 100%; }
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: #03050c; }
     ::-webkit-scrollbar-thumb { background: #1e3050; border-radius: 2px; }
@@ -14,6 +14,15 @@
     @keyframes shimmer { 0%,100%{opacity:0.4} 50%{opacity:0.7} }
     button:not(:disabled):hover { filter: brightness(1.15); }
     #boot { color:#6b8ea8; font-family: monospace; font-size: 12px; padding: 24px; }
+    /* Phone-friendly tweaks */
+    .shell { padding: 20px 24px; }
+    .header { padding: 11px 24px; }
+    .tabbar { padding: 0 24px; }
+    @media (max-width: 640px) {
+      .shell  { padding: 14px 12px; }
+      .header { padding: 10px 12px; }
+      .tabbar { padding: 0 12px; }
+    }
   </style>
 
   <!-- CDN deps: React 18, Recharts 2, Babel standalone for in-browser JSX -->
@@ -169,7 +178,7 @@ function OverviewTab({ live, loading }) {
         <span style={{ color: C.bright, fontSize: 10, fontFamily: 'monospace' }}>2-week truce signed Apr 8 · Hormuz reopening · Islamabad talks Apr 10 · Lebanon still active</span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 14 }}>
         {[
           { label: 'Conflict Day',   v: `DAY ${val(live,'conflict_day')}`,                                                    sub: 'Ceasefire since Apr 8',                      col: C.amber },
           { label: 'Brent Crude',    v: loading ? null : `$${val(live,'brent')}`,                                             sub: `${pctStr(val(live,'brent_pct'))} vs Feb 27`, col: C.green, k: 'brent' },
@@ -193,7 +202,7 @@ function OverviewTab({ live, loading }) {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
         <Card>
           <Lbl>Brent Crude — Conflict Arc + Ceasefire Drop Apr 8</Lbl>
           <div style={{ fontSize: 22, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>
@@ -225,7 +234,7 @@ function OverviewTab({ live, loading }) {
 function MarketsTab({ live, loading }) {
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 12 }}>
         {[
           { label: 'VIX Fear Index',    v: loading ? null : `${val(live,'vix')}`,         k: 'vix',      col: C.amber, delta: '▼ Easing on ceasefire'   },
           { label: 'Gold Spot',         v: loading ? null : `$${val(live,'gold')}`,       k: 'gold',     col: C.amber, delta: 'Safe haven easing'        },
@@ -340,7 +349,7 @@ function App() {
   return (
     <div style={{ background: C.bg, minHeight: '100vh', color: C.text }}>
       {/* header */}
-      <div style={{ borderBottom: `1px solid ${C.border}`, padding: '11px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+      <div className="header" style={{ borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: C.white, letterSpacing: '0.25em', fontFamily: 'monospace' }}>IRAN WAR INTEL</span>
           <span style={{ fontSize: 10, padding: '2px 8px', background: C.green + '20', border: `1px solid ${C.green}40`, color: C.green, borderRadius: 2, fontFamily: 'monospace', fontWeight: 700 }}>DAY 40 · CEASEFIRE</span>
@@ -360,7 +369,7 @@ function App() {
       </div>
 
       {/* tabs */}
-      <div style={{ borderBottom: `1px solid ${C.border}`, padding: '0 24px', display: 'flex', overflowX: 'auto' }}>
+      <div className="tabbar" style={{ borderBottom: `1px solid ${C.border}`, display: 'flex', overflowX: 'auto' }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{ padding: '10px 14px', background: 'none', border: 'none', borderBottom: tab === t.id ? `2px solid ${C.amber}` : '2px solid transparent', color: tab === t.id ? C.amber : C.textDim, fontFamily: 'monospace', fontSize: 10, fontWeight: tab === t.id ? 700 : 400, cursor: 'pointer', letterSpacing: '0.15em', whiteSpace: 'nowrap' }}>
             {t.label}
@@ -368,7 +377,7 @@ function App() {
         ))}
       </div>
 
-      <div style={{ padding: '20px 24px', maxWidth: 1400, margin: '0 auto' }}>
+      <div className="shell" style={{ maxWidth: 1400, margin: '0 auto' }}>
         {content[tab]}
       </div>
     </div>
