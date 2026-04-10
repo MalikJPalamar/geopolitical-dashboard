@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Strategic Foresight Dashboard · Centaurion.me</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#060a14;color:#f0f4ff;font-family:'Inter',system-ui,-apple-system,sans-serif;min-height:100vh}
+  button{cursor:pointer;font-family:inherit}
+  ::-webkit-scrollbar{width:6px;height:6px}
+  ::-webkit-scrollbar-track{background:#0c1222}
+  ::-webkit-scrollbar-thumb{background:#243456;border-radius:3px}
+  table{border-collapse:collapse;width:100%}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+  .live-dot{animation:pulse 2s infinite}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .fade-in{animation:fadeIn .25s ease forwards}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef} = React;
+
+// ── TOKENS ───────────────────────────────────────────────────────────────────
+const C = {
+bg:”#060a14”,surface:”#0c1222”,raised:”#111827”,
+border:”#1a2540”,borderB:”#243456”,
+text:”#f0f4ff”,sub:”#8899bb”,muted:”#3d4f70”,
+blue:”#4488ff”,blueD:”#0d1b3e”,
+green:”#10b981”,greenD:”#052e16”,
+amber:”#f59e0b”,amberD:”#2a1600”,
+red:”#ef4444”,redD:”#200808”,
+gold:”#fbbf24”,goldD:”#1c1400”,
+purple:”#a78bfa”,purpleD:”#1e1040”,
+mono:”‘SF Mono’,‘Fira Code’,monospace”,
+};
+const mc={good:C.green,warn:C.amber,danger:C.red,neutral:C.muted};
+
+// ── DATA ─────────────────────────────────────────────────────────────────────
+const FORECASTS=[
+{id:1,title:“Prolonged Conflict”,status:“VALIDATED”,conf:95,call:“CSIS/RAND: weeks-to-months”,
+evidence:[“39 consecutive days before fragile Apr 7–8 ceasefire”,“Islamabad talks Apr 10 — Iranian demands maximalist”,“Mojtaba Khamenei not seen publicly since Mar 8”,“Israel ‘Operation Eternal Darkness’ Lebanon Apr 8 — 254 killed”],
+metric:“Days active”,val:“39+”,backcast:“Resolution requires: ceasefire hold + Supreme Leader legitimacy + US exit strategy”},
+{id:2,title:”$100+ Oil / €80–100 Gas”,status:“PARTIAL”,conf:65,call:“Brent $100+; TTF €80–100/MWh”,
+evidence:[“✅ Brent peaked ~$126/bbl; closed $96.24 Apr 8”,“⚠️ TTF peaked €69/MWh — below €80 target”,“IEA: Largest supply disruption in oil market history”,“Goldman: EU gas ‘underprices’ Hormuz risk”],
+metric:“Brent Apr 8”,val:”$96.24”,backcast:“€80 gas requires: ceasefire collapse + Qatar LNG offline + EU storage scramble Q2”},
+{id:3,title:“Stagflation Trap”,status:“VALIDATED”,conf:88,call:“GDP slowing + inflation re-accelerating”,
+evidence:[“GDPNow Q1 2026: 1.3% SAAR (from 3.1% on Feb 20)”,“ISM Manufacturing Prices: 78.3 — highest since Jun 2022”,“Michigan Sentiment: 53.3 — 1st percentile historically”,“BofA declared ‘mild stagflation’ base case Apr 2, 2026”],
+metric:“ISM Prices Paid”,val:“78.3”,backcast:“Resolution requires sustained Brent <$80 for 2+ months”},
+{id:4,title:“SME Insolvency Wave”,status:“PARTIAL”,conf:60,call:“European SME insolvency wave, energy-driven”,
+evidence:[“Germany: 24,064 filings 2025 — decade high +10.3% YoY”,“France: 69,392 rolling 12-mo — 35-year record”,“Italy: Business-crisis procedures +29% H1 2025”,“Allianz: 2026 = 5th consecutive year global insolvency record”],
+metric:“French insolvencies”,val:“69,392”,backcast:“Wave accelerates H2 2026 if energy stays elevated”},
+{id:5,title:“Wellness Demand Resilience”,status:“VALIDATED”,conf:72,call:“Wellness economy resilient; breathwork demand up”,
+evidence:[“GWI: $6.8T wellness economy, 7.6% annual growth (Nov 2025)”,“Italy tourism ATH: 185M visitors, +7.1% YoY in 2025”,“Near-cation trend: European visitors up vs. lost long-haul”,“Digital wellness market: $351.95B, 25% CAGR”],
+metric:“Global wellness market”,val:”$6.8T”,backcast:“ASHA Italy: leverage near-cation + digital hybrid + nervous system regulation”},
+{id:6,title:“Digital-First Pivot”,status:“VALIDATED”,conf:92,call:“Travel barriers + cost surge force digital delivery”,
+evidence:[“14,000+ flights cancelled globally since Feb 28”,“Jet fuel: $209/bbl (+140% vs. pre-conflict)”,“Europe-Asia airfares up 25–560% (Alton Aviation, Mar 26)”,“EASA Middle East advisory extended through April”],
+metric:“Jet fuel week Apr 4”,val:”$209/bbl”,backcast:“Full aviation normalization unlikely before Q4 2026; 30–40% digital adoption persists”},
+];
+
+const MACRO={
+energy:[
+{l:“Brent Crude”,v:”$96.24/bbl”,s:“warn”},{l:“WTI Crude”,v:”$96.14/bbl”,s:“warn”},
+{l:“TTF Nat Gas”,v:“€44.10/MWh”,s:“warn”},{l:“US Gasoline”,v:”$4.12/gal”,s:“warn”},
+{l:“EU Gas Storage”,v:“~28% full”,s:“danger”},{l:“Jet Fuel”,v:”$209/bbl”,s:“danger”},
+{l:“OPEC Output”,v:“~22M b/d (−25%)”,s:“danger”},{l:“Hormuz Transits”,v:“~20/day vs 135”,s:“danger”},
+],
+geo:[
+{l:“Conflict Status”,v:“ACTIVE + FRAGILE CEASEFIRE”,s:“warn”},{l:“Hormuz”,v:“Effectively closed”,s:“danger”},
+{l:“Qatar LNG”,v:“ALL production halted”,s:“danger”},{l:“Iran Supreme Leader”,v:“Mojtaba Khamenei (hidden)”,s:“warn”},
+{l:“Islamabad Talks”,v:“April 10 — Ghalibaf vs. Vance”,s:“neutral”},{l:“US War Approval”,v:“38% support”,s:“warn”},
+{l:“Hezbollah”,v:“Active — 1,800+ rockets”,s:“danger”},{l:“Houthis”,v:“Joined Mar 28”,s:“danger”},
+],
+economy:[
+{l:“S&P 500”,v:“6,782”,s:“neutral”},{l:“GDPNow Q1 SAAR”,v:“1.3%”,s:“warn”},
+{l:“ISM Mfg Prices”,v:“78.3”,s:“danger”},{l:“Michigan Sentiment”,v:“53.3 (1st pct)”,s:“danger”},
+{l:“Gold”,v:”~$4,800/oz”,s:“neutral”},{l:“Fed Funds Rate”,v:“3.50–3.75% (held)”,s:“neutral”},
+{l:“EU AI Act Deadline”,v:“Aug 2, 2026”,s:“warn”},{l:“EU AI Act Status”,v:“114 days away”,s:“warn”},
+],
+ai:[
+{l:“Claude Opus/Sonnet 4.6”,v:”#1 Arena.ai Elo 1504”,s:“good”},{l:“Anthropic Valuation”,v:”$380B Series G”,s:“good”},
+{l:“MCP Standard”,v:“97M installs”,s:“good”},{l:“Enterprise AI”,v:“72% in production”,s:“good”},
+{l:“Q1 AI Venture”,v:”$267.2B (record)”,s:“good”},{l:“EU AI Act”,v:“Aug 2, 2026 enforce”,s:“warn”},
+],
+};
+
+const EXODUS_FACTS=[
+{icon:“🇬🇧”,stat:“115,000+”,label:“British nationals left UAE”,sub:“~1 in 2 of estimated 240K”},
+{icon:“🇮🇳”,stat:“220,000+”,label:“Indian nationals repatriated”,sub:“GCC-wide; 52K in first week”},
+{icon:“🏢”,stat:“30+”,label:“Corporates evacuated”,sub:“Goldman, Citi, PwC, HSBC, Google”},
+{icon:“🏨”,stat:“16%”,label:“Dubai hotel occupancy”,sub:“From 90% pre-conflict”},
+{icon:“🏠”,stat:“−25–50%”,label:“Dubai property transactions”,sub:“March 2026 vs prior year”},
+{icon:“✈️”,stat:”$250K”,label:“Peak private jet Dubai→Europe”,sub:“Light jet Dubai–Istanbul: $110K”},
+];
+
+const BIZ={
+aob:{label:“Alchemy of Breath / ASHA”,color:C.green,icon:“🌿”},
+bb:{label:“BuilderBee”,color:C.blue,icon:“🐝”},
+ctr:{label:“Centaurion.me”,color:C.purple,icon:“⚡”},
+};
+
+const AXES={
+aob:{xL:“← Ceasefire collapses / Energy surges”,xH:“Ceasefire holds / Energy stabilises →”,
+yH:“AOB launches digital subscription ↑”,yL:“↓ AOB stays physical-only”,
+q:[
+{r:“🔴 EXISTENTIAL RISK”,t:“Trapped”,d:“Energy unmanageable + no digital revenue. ASHA Italy forced to close or restructure.”},
+{r:“🟡 NEAR-TERM RISK”,t:“Survival Mode”,d:“Conflict extends, ASHA energy costs surge. No digital offset. Cash burn acute.”},
+{r:“🟢 LONG-TERM OPPORTUNITY”,t:“Digital Breakout”,d:“Digital subscription scales globally. ASHA as premium physical anchor. Near-cation amplifies.”},
+{r:“🟢 NEAR-TERM OPPORTUNITY”,t:“Resilient Hybrid”,d:“Ceasefire normalises costs. Digital subscription + ASHA retreats = best of both.”},
+]},
+bb:{xL:“← SME insolvency wave / clients default”,xH:“SME market stabilises / clients invest →”,
+yH:“BuilderBee productizes packages ↑”,yL:“↓ Stays custom project model”,
+q:[
+{r:“🔴 EXISTENTIAL RISK”,t:“Hollowed Out”,d:“SME clients default + custom model can’t scale. Squeezed between Big 4 and cheap AI tools.”},
+{r:“🟡 NEAR-TERM RISK”,t:“Revenue Squeeze”,d:“Client base stressed but no recurring products. Cash flow volatile. Concentration risk.”},
+{r:“🟢 LONG-TERM OPPORTUNITY”,t:“Market Leader”,d:“Productized packages (€2K/€5K/€10K) at scale. Recurring revenue moat.”},
+{r:“🟢 NEAR-TERM OPPORTUNITY”,t:“Crisis Automation”,d:“SME desperation = demand for ‘automate to survive’ packages. EU AI Act deadline = NOW.”},
+]},
+ctr:{xL:“← CAIO role stays symbolic / niche”,xH:“CAIO becomes operational mandate →”,
+yH:“Centaurion Method formalized as IP ↑”,yL:“↓ Stays advisory-only consulting”,
+q:[
+{r:“🔴 LONG-TERM RISK”,t:“Missed Window”,d:“Amodei’s ‘brief centaur phase’ closes before IP formalized. Commoditized by Deloitte/PwC.”},
+{r:“🟡 NEAR-TERM RISK”,t:“Invisible Expert”,d:“Real expertise but no formalized product. Window narrows as competitors formalize centaur framing.”},
+{r:“🟢 NEAR-TERM OPPORTUNITY”,t:“First Mover”,d:“Centaurion publishes Method NOW. Fractional CAIO at €12K/month launched. Harvard/Stanford validated.”},
+{r:“🟢 LONG-TERM OPPORTUNITY”,t:“Category Creator”,d:“CAIO becomes C-suite standard + Centaurion Method is the defining framework.”},
+]},
+};
+
+const FRAMINGS={
+aob:{
+optimistic:{h:“AOB becomes the world’s leading nervous system regulation brand — digital-first, ASHA as flagship physical anchor”,a:“Digital subscription €19–29/month → 2% of 200K database = €48–70K/month recurring. ASHA repositioned as 7-day immersive certification hub. B2B corporate wellness pipeline activated.”,r:“Q4 2027: €150K+ MRR · 2,000+ facilitators · ASHA 90%+ occupancy”},
+neutral:{h:“AOB maintains trajectory with modest digital additions; ASHA continues seasonal retreats”,a:“Some digital programs added. Claude for Teams deployed. B2B pilots launched without systematic pipeline.”,r:“Q4 2027: Similar revenue · Incremental growth · Vulnerable to next energy shock”},
+catastrophic:{h:“Italy energy costs make ASHA non-viable; digital pivot not executed in time”,a:“ASHA reduces to summer-only or closes. 200K database unmined. Certification market captured by better-digitized competitors.”,r:“Q4 2027: Revenue decline · ASHA mothballed · Market share lost”},
+},
+bb:{
+optimistic:{h:“BuilderBee becomes the definitive AI automation partner for European SMEs navigating crisis-then-recovery”,a:“Three productized packages (€2K/€5K/€10K) launched May 2026. EU AI Act compliance advisory before Aug deadline. GHL white-label as recurring infrastructure.”,r:“Q4 2027: €25K+/month recurring · 50+ clients · EU Act advisory standalone revenue”},
+neutral:{h:“BuilderBee continues custom AI projects with moderate growth; some productization attempted”,a:“Client-by-client work continues. Revenue grows but concentrated in few large clients with high churn risk.”,r:“Q4 2027: €10–15K/month · Fragile project-dependent model”},
+catastrophic:{h:“SME client base collapses from insolvency wave; no productization pivot executed”,a:“Key SME clients unable to pay. OpenAI/Anthropic enterprise products compress consulting margin to near zero.”,r:“Q4 2027: Revenue below €5K/month · Business model requires full reinvention”},
+},
+ctr:{
+optimistic:{h:“Centaurion Method becomes the defining human-AI augmentation framework for European enterprises”,a:“Method published Q2 2026 (Harvard/Stanford/Fortune validation). First 5 fractional CAIO clients at €12K/month. FEP differentiation secured as IP.”,r:“Q4 2027: 8 clients · €96K/month · Method in 3+ AI governance standards · Speaking circuit”},
+neutral:{h:“Centaurion grows as advisory but Method not yet formalized; competitor occupies centaur framing”,a:“Good conversations but Method stays a pitch deck, not published IP. Free Energy Principle not operationalized.”,r:“Q4 2027: €20–30K/month advisory · Differentiation eroding · Window narrowing”},
+catastrophic:{h:“The centaur window closes before Centaurion formalizes; larger firms absorb the market”,a:“Deloitte/PwC launch full CAIO practices. Centaurion value undifferentiated from generic AI consulting.”,r:“Q4 2027: Advisory stalls · Permanent opportunity cost of delay”},
+},
+};
+
+const BACKCASTS={
+aob:{goal:“AOB: Global digital-first breathwork platform generating €100K+/month by Q4 2027, ASHA as certified facilitation hub”,
+items:[
+{t:“Apr–May 2026”,type:“action”,txt:“Launch ‘Breathwork for Uncertain Times’ email series to 200K contacts — activate database, generate demand signal”,ent:“Malik + AOB Marketing”},
+{t:“May–Jun 2026”,type:“action”,txt:“Complete GHL CRM migration; sunset Ontraport; surgical email validation (Reoon); clean database”,ent:“Malik + Renārs + Katerina”},
+{t:“Jun 2026”,type:“action”,txt:“Launch digital subscription €19–29/month — target 500 subscribers = €10K/month minimum viable”,ent:“AOB Digital Team”},
+{t:“Jul–Aug 2026”,type:“opportunity”,txt:“ASHA Gulf Expat Residency Package live — ‘A Place to Land. A Place to Reset.’ €3,500/2-week, €6–12K/month”,ent:“ASHA Italy”},
+{t:“Q3 2026”,type:“action”,txt:“Launch B2B corporate wellness pilot — target 3 contracts at €5K/month each (HR resilience angle)”,ent:“Anthony + Malik”},
+{t:“Q4 2026”,type:“opportunity”,txt:“HeyGen digital twin scaling — multilingual certification content reduces delivery cost 60%”,ent:“AOB Content Team”},
+{t:“Q1 2027”,type:“action”,txt:“Scale digital subscription to 2,000+ subscribers; hire dedicated digital content manager”,ent:“AOB Leadership”},
+{t:“Q4 2027”,type:“opportunity”,txt:“B2B pipeline systematic; facilitator licensing model live; 1,000+ active global facilitators”,ent:“AOB Global”},
+]},
+bb:{goal:“BuilderBee: Productized AI automation agency generating €25K+/month recurring by Q4 2027”,
+items:[
+{t:“Apr 2026”,type:“action”,txt:“Triage client portfolio. Proactive outreach within 48h. Offer EU AI Act audit to client list — Aug 2 deadline = built-in urgency”,ent:“Malik / BuilderBee”},
+{t:“Apr–May 2026”,type:“action”,txt:“Design three productized packages: Core (€2K), Growth (€5K), Enterprise (€10K)”,ent:“Malik”},
+{t:“May 2026”,type:“opportunity”,txt:“Contact relocation firms (Citrus, ISS, Newland Chase) for GHL white-label — recurring €500–1K/month per firm”,ent:“BuilderBee”},
+{t:“Jun 2026”,type:“action”,txt:“First GHL white-label deployments for 2 SME clients — recurring €500/month infrastructure per client”,ent:“BuilderBee”},
+{t:“Q3 2026”,type:“action”,txt:“Channel partnerships with 2 European SME associations for package distribution at scale”,ent:“Malik”},
+{t:“Aug 2026”,type:“risk”,txt:“EU AI Act enforcement deadline — COMPLIANCE WINDOW CLOSES. Premium advisory only available before this date.”,ent:“Market Trigger”},
+{t:“Q4 2026”,type:“action”,txt:“Target: 5 recurring clients at €2–5K/month = €15K/month baseline. Document case studies.”,ent:“BuilderBee”},
+{t:“Q4 2027”,type:“opportunity”,txt:“50+ client base. GHL white-label = passive infrastructure revenue stream.”,ent:“BuilderBee”},
+]},
+ctr:{goal:“Centaurion.me: 8 fractional CAIO clients at €96K/month by Q4 2027, Centaurion Method as published IP”,
+items:[
+{t:“Apr 2026”,type:“action”,txt:“Publish ‘The Centaur Imperative’ — reference Harvard/Stanford/Fortune/West Point validation cluster”,ent:“Malik”},
+{t:“Apr–May 2026”,type:“action”,txt:“Formalize Centaurion Method v1.0 — Cyborg/Centaur/Self-Automator diagnostic as paid board assessment”,ent:“Malik”},
+{t:“May 2026”,type:“action”,txt:“Submit comments to NIST AI Agent Standards Initiative — governance thought leadership on record”,ent:“Malik / Centaurion”},
+{t:“Jun 2026”,type:“action”,txt:“Launch fractional CAIO offer €8–12K/month — target first 2 enterprise clients via AOB + BuilderBee network”,ent:“Malik / Centaurion”},
+{t:“Q3 2026”,type:“opportunity”,txt:”‘AI Governance in Geopolitical Crisis’ briefing distributed to 50 boards — direct pipeline”,ent:“Centaurion”},
+{t:“Q4 2026”,type:“action”,txt:“Target: 3 fractional CAIO clients = €30–36K/month. Centaurion Method v1.0 published.”,ent:“Centaurion”},
+{t:“Q1–Q2 2027”,type:“opportunity”,txt:“Speaking circuit: 3 major European AI governance conferences. Workshop program for boards launched.”,ent:“Centaurion”},
+{t:“Q4 2027”,type:“opportunity”,txt:“8 clients · €96K/month · Method cited in EU AI Act compliance frameworks · IP licensing live”,ent:“Centaurion”},
+]},
+};
+
+const MOVES={
+aob:[
+{id:“A1”,q:“Q1”,x:90,y:85,title:“ASHA Gulf Expat Residency Package”,tag:“🔥 LOW HANGING FRUIT”,asset:“ASHA Italy facility + AOB breathwork”,move:“2–8 week extended-stay residency: breathwork daily + remote work infra + relocator community. €6–12K/month.”,why:“ASHA already operational. No new assets. Pricing within Dubai expat housing budget.”},
+{id:“A2”,q:“Q1”,x:75,y:70,title:”‘Land & Reset’ London Expat Outreach”,tag:“🎯 TACTICAL”,asset:“AOB 200K database + Anthony network”,move:“Partner with Citrus/ISS relocation firms. Target British Dubai returnees flooding London.”,why:“115K British left UAE — overwhelmed London luxury rentals. ASHA = 2hr from London.”},
+{id:“A3”,q:“Q1”,x:80,y:60,title:”‘Breathwork for Transition’ Email Series”,tag:“🎯 TACTICAL”,asset:“AOB 200K contact database”,move:“Free 5-day breathwork series to existing list. Convert to ASHA residency or digital subscription.”,why:“Zero asset creation. Database exists. Activates dormant contacts with crisis-relevant content.”},
+{id:“A4”,q:“Q2”,x:35,y:88,title:“B2B Corporate Wellness → Gulf HQ Relocators”,tag:“🌱 BIG BET”,asset:“AOB certification + ASHA retreat capacity”,move:“Target multinationals relocating GCC regional HQs to Europe. Employee resilience programs. €5K/month.”,why:“Goldman/PwC evacuated Gulf offices — European HQs need employee support programs.”},
+{id:“A5”,q:“Q3”,x:70,y:35,title:“UAE Facilitator Network Activation”,tag:“💡 EXPLORE”,asset:“AOB global facilitator network (1,000+)”,move:“Brief Gulf-based AOB facilitators. They become a distributed sales force for ASHA residency.”,why:“Zero cost. Facilitators are warm credible voices in wellness to their local networks.”},
+],
+bb:[
+{id:“B1”,q:“Q1”,x:85,y:80,title:“EU AI Act Compliance Sprint”,tag:“🔥 LOW HANGING FRUIT”,asset:“BuilderBee AI automation + GHL stack”,move:“€2K–5K compliance audit + remediation for European SMEs. Aug 2, 2026 = 114 days. Send client list TODAY.”,why:“Every European SME needs this by August. Urgency built in. Zero new capabilities required.”},
+{id:“B2”,q:“Q1”,x:78,y:72,title:”‘Crisis Automation’ SME Package”,tag:“🎯 TACTICAL”,asset:“BuilderBee GHL + existing client relationships”,move:“Gulf-disrupted SMEs in Europe. ‘Your supply chain broke — rebuild with AI.’ €3,500 + €500/month.”,why:“Companies evacuating Gulf need rapid operational restructuring. BuilderBee solves exactly that.”},
+{id:“B3”,q:“Q1”,x:65,y:65,title:“GHL White-Label for Relocation Firms”,tag:“🎯 TACTICAL”,asset:“BuilderBee GHL white-label capability”,move:“Citrus/ISS/Newland Chase are overwhelmed. Offer GHL CRM + automation pipeline for client flows.”,why:“These firms have exploding demand, zero tech infrastructure. Deploy in 2 weeks.”},
+{id:“B4”,q:“Q2”,x:30,y:85,title:“AI-Powered SME Insolvency Prevention”,tag:“🌱 BIG BET”,asset:“BuilderBee automation + financial AI tooling”,move:“Cash flow monitoring + early-warning AI service. €500/month SaaS. Target 100 SMEs.”,why:“Germany +10% insolvencies. France 35-year record. Massive unmet need for SME intelligence.”},
+{id:“B5”,q:“Q3”,x:72,y:40,title:“Dubai-Europe Business Continuity”,tag:“💡 EXPLORE”,asset:“BuilderBee multi-geography automation”,move:“Help companies with Dubai + European ops automate handoffs as they reduce Gulf headcount.”,why:“Immediate opportunity as firms restructure. Project-based = fast close cycle.”},
+],
+ctr:[
+{id:“C1”,q:“Q1”,x:88,y:82,title:”‘AI Governance in Crisis’ Board Briefing”,tag:“🔥 LOW HANGING FRUIT”,asset:“Centaurion Method + geopolitical intelligence”,move:“Publish ‘AI Governance Crisis Playbook’. Distribute to 50 boards via LinkedIn. Convert to CAIO engagements.”,why:“Iran war AI lessons = perfect demand storm. Content is already in our heads. 1 week to publish.”},
+{id:“C2”,q:“Q1”,x:76,y:76,title:“Fractional CAIO for Gulf-Exiting Execs”,tag:“🎯 TACTICAL”,asset:“Centaurion advisory + FEP framework”,move:“Target C-suite evacuated from Gulf restructuring European operations. €10–15K/month fractional CAIO.”,why:“These executives are in strategic limbo. They’ve lost their operating context.”},
+{id:“C3”,q:“Q1”,x:70,y:68,title:“Centaur Assessment Tool — Lead Magnet”,tag:“🎯 TACTICAL”,asset:“Centaurion Method IP (Cyborg/Centaur taxonomy)”,move:“Publish ‘Are you a Cyborg, Centaur, or Self-Automator?’ shareable assessment. Pipeline → fractional CAIO.”,why:“Harvard/MIT/Stanford validated centaur framing NOW. Window Amodei called ‘brief’ is open.”},
+{id:“C4”,q:“Q2”,x:35,y:90,title:“CAIO Practice for Gulf-Restructuring PE”,tag:“🌱 BIG BET”,asset:“Centaurion Method + crisis governance IP”,move:“PE firms repricing Gulf portfolios need AI governance. €25K/quarter. 10 firms = €1M/year pipeline.”,why:“PE firms need AI-augmented due diligence. FEP framework = unique differentiation.”},
+{id:“C5”,q:“Q3”,x:68,y:42,title:“NIST AI Standards Submission”,tag:“💡 EXPLORE”,asset:“Centaurion governance expertise”,move:“Submit formal comments to NIST AI Agent Standards. Publish publicly. Named governance voice.”,why:“NIST comment period is NOW. Zero cost. Major credibility signal. EU-relevant governance standards.”},
+],
+};
+
+const QC={Q1:{l:“🔥 Fast + High Impact”,c:C.gold},Q2:{l:“🌱 Slow + High Impact”,c:C.green},Q3:{l:“💡 Fast + Low Impact”,c:C.blue},Q4:{l:“⏸ Slow + Low Impact”,c:C.muted}};
+const TC={action:C.blue,opportunity:C.green,risk:C.red,indicator:C.amber};
+const TB={action:C.blueD,opportunity:C.greenD,risk:C.redD,indicator:C.amberD};
+const SC={VALIDATED:C.green,PARTIAL:C.amber,INVALIDATED:C.red};
+
+// ── UI COMPONENTS ─────────────────────────────────────────────────────────────
+const Tag=({c,bg,children})=>(
+<span style={{fontSize:9,fontFamily:C.mono,fontWeight:700,letterSpacing:“0.08em”,
+padding:“2px 8px”,borderRadius:20,background:bg||C.blueD,color:c||C.blue,
+border:`1px solid ${c||C.blue}55`,whiteSpace:“nowrap”}}>{children}</span>
+);
+const Pill=({color,children})=>(
+<span style={{fontSize:10,fontFamily:C.mono,color,background:`${color}18`,
+border:`1px solid ${color}44`,borderRadius:4,padding:“2px 8px”}}>{children}</span>
+);
+const SL=({children})=>(
+
+  <div style={{fontSize:10,color:C.muted,fontFamily:C.mono,letterSpacing:"0.12em",
+    textTransform:"uppercase",marginBottom:10}}>{children}</div>
+);
+const Dot=({s})=>(
+  <div style={{width:8,height:8,borderRadius:"50%",background:mc[s],flexShrink:0}}/>
+);
+
+function MacroTable({title,icon,rows}){return(
+
+  <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:16,flex:1}}>
+    <div style={{fontSize:11,color:C.muted,fontFamily:C.mono,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>{icon} {title}</div>
+    {rows.map((r,i)=>(
+      <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+        padding:"6px 0",borderBottom:`1px solid ${C.border}88`}}>
+        <div style={{fontSize:11,color:C.sub}}>{r.l}</div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{fontSize:11,color:C.text,fontFamily:C.mono,fontWeight:600}}>{r.v}</div>
+          <Dot s={r.s}/>
+        </div>
+      </div>
+    ))}
+  </div>
+);}
+
+function ForecastCard({f}){const col=SC[f.status];return(
+
+  <div className="fade-in" style={{background:C.surface,border:`1px solid ${col}33`,borderRadius:8,padding:16}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+      <div style={{flex:1}}>
+        <div style={{fontSize:9,color:C.muted,fontFamily:C.mono,letterSpacing:"0.1em"}}>FORECAST {f.id}</div>
+        <div style={{fontSize:16,fontWeight:800,color:C.text,marginTop:2,letterSpacing:"-0.01em"}}>{f.title}</div>
+        <div style={{fontSize:11,color:C.sub,marginTop:4}}>{f.call}</div>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8,marginLeft:12}}>
+        <Tag c={col} bg={`${col}18`}>{f.status==="VALIDATED"?"✓ VALIDATED":f.status==="PARTIAL"?"◐ PARTIAL":"✗ INVALID"}</Tag>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:20,fontWeight:900,color:col,fontFamily:C.mono,lineHeight:1}}>{f.val}</div>
+          <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:"0.08em",marginTop:2}}>{f.metric}</div>
+        </div>
+      </div>
+    </div>
+    <div style={{marginBottom:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+        <span style={{fontSize:9,color:C.muted,fontFamily:C.mono,textTransform:"uppercase",letterSpacing:"0.08em"}}>Confidence</span>
+        <span style={{fontSize:9,color:col,fontFamily:C.mono}}>{f.conf}%</span>
+      </div>
+      <div style={{height:3,background:C.border,borderRadius:2}}>
+        <div style={{height:"100%",width:`${f.conf}%`,background:col,borderRadius:2}}/>
+      </div>
+    </div>
+    {f.evidence.map((e,i)=>(
+      <div key={i} style={{fontSize:11,color:e.startsWith("✅")?C.green:e.startsWith("⚠️")?C.amber:C.sub,
+        padding:"3px 0",borderBottom:`1px solid ${C.border}55`}}>
+        {!e.startsWith("✅")&&!e.startsWith("⚠️")&&<span style={{color:C.blue,marginRight:6}}>›</span>}{e}
+      </div>
+    ))}
+    <div style={{background:C.bg,borderRadius:4,padding:"8px 10px",borderLeft:`3px solid ${C.blue}`,marginTop:10}}>
+      <div style={{fontSize:9,color:C.blue,fontFamily:C.mono,letterSpacing:"0.1em",marginBottom:2}}>FTI BACKCAST CONDITION</div>
+      <div style={{fontSize:11,color:C.sub}}>{f.backcast}</div>
+    </div>
+  </div>
+);}
+
+function AxesMatrix({biz}){const d=AXES[biz];
+const bc=(r)=>r.startsWith(“🔴”)?C.red:r.startsWith(“🟡”)?C.amber:C.green;
+return(
+<div>
+<div style={{textAlign:“center”,fontSize:11,color:C.green,fontFamily:C.mono,marginBottom:8}}>{d.yH}</div>
+<div style={{display:“grid”,gridTemplateColumns:“1fr 1fr”,gap:8}}>
+{d.q.map((q,i)=>(
+<div key={i} style={{background:C.bg,border:`1px solid ${bc(q.r)}44`,borderRadius:6,padding:14,minHeight:110}}>
+<div style={{fontSize:10,marginBottom:4}}>{q.r}</div>
+<div style={{fontSize:14,fontWeight:800,color:C.text,marginBottom:6}}>{q.t}</div>
+<div style={{fontSize:11,color:C.sub,lineHeight:1.6}}>{q.d}</div>
+</div>
+))}
+</div>
+<div style={{textAlign:“center”,fontSize:11,color:C.red,fontFamily:C.mono,marginTop:8}}>{d.yL}</div>
+<div style={{display:“flex”,justifyContent:“space-between”,marginTop:6}}>
+<div style={{fontSize:10,color:C.red,fontFamily:C.mono}}>{d.xL}</div>
+<div style={{fontSize:10,color:C.green,fontFamily:C.mono}}>{d.xH}</div>
+</div>
+</div>
+);}
+
+function EmotiveCard({type,data}){
+const cfg={optimistic:{c:C.green,bg:C.greenD,icon:“◆”,l:“OPTIMISTIC — Best decisions using data at hand”},
+neutral:{c:C.amber,bg:C.amberD,icon:“◇”,l:“NEUTRAL — Preserved status quo”},
+catastrophic:{c:C.red,bg:C.redD,icon:“▼”,l:“PESSIMISTIC / CATASTROPHIC — Ignored the data”}}[type];
+return(
+<div style={{background:cfg.bg,border:`1px solid ${cfg.c}44`,borderRadius:8,padding:16,flex:1}}>
+<div style={{fontSize:9,fontFamily:C.mono,color:cfg.c,letterSpacing:“0.1em”,marginBottom:10}}>
+{cfg.icon} {cfg.l}
+</div>
+<div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:10,lineHeight:1.5}}>{data.h}</div>
+<div style={{fontSize:11,color:C.sub,lineHeight:1.7,marginBottom:12}}>
+<span style={{fontSize:9,color:cfg.c,fontFamily:C.mono,letterSpacing:“0.08em”}}>PRESENT-DAY ACTIONS › </span>{data.a}
+</div>
+<div style={{borderTop:`1px solid ${cfg.c}22`,paddingTop:10,fontSize:11,color:cfg.c,fontFamily:C.mono}}>
+🎯 {data.r}
+</div>
+</div>
+);}
+
+function BackcastTimeline({biz}){const d=BACKCASTS[biz];return(
+
+  <div>
+    <div style={{background:C.blueD,border:`2px solid ${C.blue}`,borderRadius:8,padding:14,marginBottom:20}}>
+      <div style={{fontSize:9,color:"#60a5fd",fontFamily:C.mono,letterSpacing:"0.1em",marginBottom:4}}>DESIRED FUTURE STATE — Q4 2027</div>
+      <div style={{fontSize:14,fontWeight:700,color:C.text}}>{d.goal}</div>
+    </div>
+    <div style={{position:"relative"}}>
+      <div style={{position:"absolute",left:96,top:0,bottom:0,width:2,background:C.border}}/>
+      {d.items.map((m,i)=>(
+        <div key={i} style={{display:"flex",gap:0,marginBottom:10,position:"relative"}}>
+          <div style={{width:88,textAlign:"right",paddingRight:14,paddingTop:10,fontSize:10,
+            color:C.muted,fontFamily:C.mono,flexShrink:0,lineHeight:1.4}}>{m.t}</div>
+          <div style={{width:20,height:20,borderRadius:"50%",background:TB[m.type],
+            border:`2px solid ${TC[m.type]}`,display:"flex",alignItems:"center",justifyContent:"center",
+            fontSize:8,color:TC[m.type],flexShrink:0,zIndex:1,marginTop:8}}>
+            {m.type==="action"?"■":m.type==="opportunity"?"●":m.type==="risk"?"▲":"◆"}
+          </div>
+          <div style={{flex:1,background:TB[m.type],border:`1px solid ${TC[m.type]}33`,
+            borderRadius:6,padding:"9px 12px",marginLeft:12}}>
+            <div style={{fontSize:12,color:C.text,lineHeight:1.5,marginBottom:4}}>{m.txt}</div>
+            <div style={{fontSize:10,color:TC[m.type],fontFamily:C.mono}}>ENTITY › {m.ent}</div>
+          </div>
+        </div>
+      ))}
+      <div style={{display:"flex",gap:0,marginTop:20}}>
+        <div style={{width:88}}/>
+        <div style={{width:20,height:20,background:C.blue,borderRadius:4,display:"flex",
+          alignItems:"center",justifyContent:"center",fontSize:10,color:"white",flexShrink:0,zIndex:1,marginTop:6}}>★</div>
+        <div style={{flex:1,background:C.blueD,border:`2px solid ${C.blue}`,borderRadius:6,padding:12,marginLeft:12}}>
+          <div style={{fontSize:9,color:"#60a5fd",fontFamily:C.mono,letterSpacing:"0.1em",marginBottom:4}}>DESIRED FUTURE STATE</div>
+          <div style={{fontSize:12,color:C.text}}>{d.goal}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+);}
+
+function StrategicQuadrant({bizId}){
+const [hov,setHov]=useState(null);
+const moves=MOVES[bizId];
+const S=380,P=44,inner=S-P*2;
+const toXY=(x,y)=>({cx:P+(x/100)*inner,cy:P+((100-y)/100)*inner});
+const qc={Q1:C.gold,Q2:C.green,Q3:C.blue,Q4:C.muted};
+const hm=moves.find(m=>m.id===hov);
+return(
+<div style={{display:“flex”,gap:20,flexWrap:“wrap”}}>
+<div>
+<svg width={S} height={S} style={{display:“block”}}>
+<rect x={P+inner/2} y={P} width={inner/2} height={inner/2} fill={`${C.gold}08`}/>
+<rect x={P} y={P} width={inner/2} height={inner/2} fill={`${C.green}08`}/>
+<rect x={P+inner/2} y={P+inner/2} width={inner/2} height={inner/2} fill={`${C.blue}08`}/>
+<rect x={P} y={P+inner/2} width={inner/2} height={inner/2} fill={`${C.muted}04`}/>
+<line x1={P} y1={P+inner/2} x2={P+inner} y2={P+inner/2} stroke={C.border} strokeWidth={1}/>
+<line x1={P+inner/2} y1={P} x2={P+inner/2} y2={P+inner} stroke={C.border} strokeWidth={1}/>
+<text x={P+inner/2} y={S-8} textAnchor="middle" fill={C.muted} fontSize={9} fontFamily={C.mono}>← SLOW · FAST TO EXECUTE →</text>
+<text x={12} y={P+inner/2} textAnchor=“middle” fill={C.muted} fontSize={9} fontFamily={C.mono} transform={`rotate(-90,12,${P+inner/2})`}>← LOW IMPACT · HIGH IMPACT →</text>
+{[{tx:P+inner*.75,ty:P+14,l:“Q1 LOW HANGING FRUIT”,c:C.gold},{tx:P+inner*.25,ty:P+14,l:“Q2 BIG BETS”,c:C.green},
+{tx:P+inner*.75,ty:P+inner/2+14,l:“Q3 QUICK WINS”,c:C.blue},{tx:P+inner*.25,ty:P+inner/2+14,l:“Q4 DEFER”,c:C.muted}]
+.map((q,i)=><text key={i} x={q.tx} y={q.ty} textAnchor="middle" fill={q.c} fontSize={8} fontFamily={C.mono} opacity={0.7}>{q.l}</text>)}
+{moves.map(m=>{const{cx,cy}=toXY(m.x,m.y);const col=qc[m.q];const ih=hov===m.id;
+return(<g key={m.id} onMouseEnter={()=>setHov(m.id)} onMouseLeave={()=>setHov(null)} style={{cursor:“pointer”}}>
+<circle cx={cx} cy={cy} r={ih?23:18} fill={`${col}22`} stroke={col} strokeWidth={ih?2:1}/>
+<text x={cx} y={cy-3} textAnchor="middle" fill={col} fontSize={11} fontWeight="800" fontFamily={C.mono}>{m.id}</text>
+<text x={cx} y={cy+8} textAnchor="middle" fill={col} fontSize={7} fontFamily={C.mono}>{m.q}</text>
+</g>);})}
+</svg>
+</div>
+<div style={{flex:1,minWidth:250}}>
+{hm?(
+<div style={{background:C.surface,border:`1px solid ${qc[hm.q]}55`,borderRadius:8,padding:16}}>
+<div style={{display:“flex”,gap:8,marginBottom:10,flexWrap:“wrap”}}>
+<Tag c={qc[hm.q]} bg={`${qc[hm.q]}18`}>{hm.id}</Tag>
+<Tag c={C.amber} bg={C.amberD}>{hm.tag}</Tag>
+</div>
+<div style={{fontSize:15,fontWeight:800,color:C.text,marginBottom:8}}>{hm.title}</div>
+<div style={{fontSize:10,color:C.muted,fontFamily:C.mono,marginBottom:6,textTransform:“uppercase”}}>EXISTING ASSET</div>
+<div style={{fontSize:12,color:C.blue,background:C.blueD,borderRadius:4,padding:“6px 10px”,marginBottom:12,lineHeight:1.5}}>{hm.asset}</div>
+<div style={{fontSize:10,color:C.muted,fontFamily:C.mono,marginBottom:6,textTransform:“uppercase”}}>THE MOVE</div>
+<div style={{fontSize:12,color:C.sub,lineHeight:1.7,marginBottom:12}}>{hm.move}</div>
+<div style={{borderLeft:`3px solid ${qc[hm.q]}`,paddingLeft:10}}>
+<div style={{fontSize:10,color:C.muted,fontFamily:C.mono,marginBottom:4,textTransform:“uppercase”}}>WHY NOW</div>
+<div style={{fontSize:12,color:qc[hm.q],lineHeight:1.6}}>{hm.why}</div>
+</div>
+</div>
+):(
+<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:16}}>
+<SL>Hover a bubble → see full move detail</SL>
+{moves.map(m=>{const col=qc[m.q];return(
+<div key={m.id} onMouseEnter={()=>setHov(m.id)} onMouseLeave={()=>setHov(null)}
+style={{display:“flex”,gap:10,alignItems:“flex-start”,padding:“8px 10px”,marginBottom:6,
+background:`${col}08`,border:`1px solid ${col}33`,borderRadius:6,cursor:“pointer”}}>
+<span style={{fontSize:12,fontWeight:800,color:col,fontFamily:C.mono,minWidth:24}}>{m.id}</span>
+<div>
+<div style={{fontSize:11,fontWeight:700,color:C.text}}>{m.title}</div>
+<div style={{fontSize:10,color:C.sub}}>{m.tag}</div>
+</div>
+</div>
+);})}
+</div>
+)}
+</div>
+</div>
+);}
+
+// ── MAIN APP ─────────────────────────────────────────────────────────────────
+function App(){
+const [tab,setTab]=useState(“exodus”);
+const [biz,setBiz]=useState(“aob”);
+const bizTabs=[“quadrant”,“scenarios”,“framings”,“backcast”];
+
+const TABS=[
+{id:“situation”,l:“📡 Situation Room”},
+{id:“forecasts”,l:“📊 Forecast Audit”},
+{id:“exodus”,l:“🚨 Gulf Exodus”},
+{id:“quadrant”,l:“⚡ Strategic Quadrant”},
+{id:“matrix”,l:“📋 All Moves”},
+{id:“scenarios”,l:“🔮 Scenario Matrix”},
+{id:“framings”,l:“🌡 Emotive Framings”},
+{id:“backcast”,l:“🗺 Backcasting”},
+{id:“asha”,l:“🌿 ASHA Package”},
+];
+
+const ALL_MOVES=[
+{id:“A1”,biz:“AOB/ASHA”,bc:C.green,asset:“ASHA Italy facility”,action:“Build landing page + email 3 relocation firms”,rev:“€6–12K/month/guest”,when:“This week”},
+{id:“A2”,biz:“AOB/ASHA”,bc:C.green,asset:“Anthony network + 200K DB”,action:“LinkedIn post targeting British Dubai returnees”,rev:“2–3 bookings = €20K”,when:“48 hours”},
+{id:“A3”,biz:“AOB”,bc:C.green,asset:“200K contact database”,action:“Send ‘Breathwork for Transition’ email series”,rev:“Pipeline + conversions”,when:“48 hours”},
+{id:“A4”,biz:“AOB”,bc:C.green,asset:“AOB certification + ASHA”,action:“Pilot 2 corporate wellness contracts”,rev:“€5K/month × 2”,when:“Q3 2026”},
+{id:“B1”,biz:“BuilderBee”,bc:C.blue,asset:“AI automation expertise”,action:“Send EU AI Act audit offer to client list”,rev:“€2–5K × 5 = €25K”,when:“This week”},
+{id:“B2”,biz:“BuilderBee”,bc:C.blue,asset:“GHL stack + automations”,action:“Email Gulf-disrupted clients crisis automation”,rev:“€3.5K + recurring”,when:“This week”},
+{id:“B3”,biz:“BuilderBee”,bc:C.blue,asset:“GHL white-label”,action:“Contact Citrus + ISS + Newland Chase”,rev:“€500–1K/mo per firm”,when:“2 weeks”},
+{id:“C1”,biz:“Centaurion”,bc:C.purple,asset:“Geopolitical AI analysis”,action:“Publish ‘AI Governance in Crisis’ article”,rev:“Pipeline for CAIO”,when:“This week”},
+{id:“C2”,biz:“Centaurion”,bc:C.purple,asset:“Centaurion Method + FEP”,action:“LinkedIn outreach to Gulf-exiting C-suite”,rev:“€10–15K/month/client”,when:“2 weeks”},
+{id:“C3”,biz:“Centaurion”,bc:C.purple,asset:“Centaur taxonomy (Harvard validated)”,action:“Publish Centaur Assessment as shareable tool”,rev:“Lead magnet → CAIO”,when:“This week”},
+];
+
+return(
+<div style={{background:C.bg,minHeight:“100vh”,fontFamily:C.sans,color:C.text,padding:“20px 24px”,maxWidth:1240,margin:“0 auto”}}>
+
+```
+  {/* Header */}
+  <div style={{marginBottom:20,paddingBottom:16,borderBottom:`1px solid ${C.border}`}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12}}>
+      <div>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,background:C.redD,
+            border:`1px solid ${C.red}66`,borderRadius:4,padding:"3px 10px"}}>
+            <div className="live-dot" style={{width:6,height:6,borderRadius:"50%",background:C.red}}/>
+            <span style={{fontSize:9,color:C.red,fontFamily:C.mono,fontWeight:700,letterSpacing:"0.12em"}}>LIVE</span>
+          </div>
+          <Tag c={C.gold} bg={C.goldD}>🆕 GULF EXPAT EXODUS VALIDATED</Tag>
+          <span style={{fontSize:9,color:C.muted,fontFamily:C.mono}}>APR 10, 2026 · DAY 40 · OPERATION EPIC FURY</span>
+        </div>
+        <div style={{fontSize:11,color:C.muted,fontFamily:C.mono,letterSpacing:"0.08em",marginBottom:4}}>
+          CENTAURION.ME / STRATEGIC-FORESIGHT-DASHBOARD
+        </div>
+        <h1 style={{fontSize:26,fontWeight:900,letterSpacing:"-0.025em",margin:0}}>
+          Strategic Intelligence Dashboard
+        </h1>
+        <div style={{fontSize:12,color:C.sub,marginTop:4}}>
+          FTI 7-Step Methodology · CIPHER · Axes of Uncertainty · Emotive Framings · Backcasting · Gulf Expat Opportunity
+        </div>
+      </div>
+      <div style={{display:"flex",gap:16}}>
+        {[{l:"Forecasts Validated",v:"4 / 6",c:C.green},{l:"Opportunity Window",v:"4–8W",c:C.gold},{l:"Moves Identified",v:"15",c:C.blue}]
+          .map((s,i)=>(
+            <div key={i} style={{textAlign:"right"}}>
+              <div style={{fontSize:9,color:C.muted,fontFamily:C.mono,textTransform:"uppercase"}}>{s.l}</div>
+              <div style={{fontSize:22,fontWeight:900,color:s.c,fontFamily:C.mono,lineHeight:1}}>{s.v}</div>
+            </div>
+        ))}
+      </div>
+    </div>
+
+    {/* FTI Funnel Progress */}
+    <div style={{display:"flex",gap:4,marginTop:14,flexWrap:"wrap"}}>
+      {[{n:1,l:"Signals",s:"done"},{n:2,l:"Trends",s:"done"},{n:3,l:"Uncertainties",s:"done"},
+        {n:4,l:"Scenarios",s:"active"},{n:5,l:"Rehearsing",s:"active"},{n:6,l:"Planning",s:"next"},{n:7,l:"Actioning",s:"next"}]
+        .map((f,i)=>(
+          <div key={f.n} style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
+            <div style={{flex:1,padding:"5px 4px",borderRadius:4,textAlign:"center",
+              background:f.s==="done"?C.greenD:f.s==="active"?C.blueD:C.bg,
+              border:`1px solid ${f.s==="done"?C.green:f.s==="active"?C.blue:C.border}`}}>
+              <div style={{fontSize:8,fontFamily:C.mono,color:f.s==="done"?C.green:f.s==="active"?C.blue:C.muted,letterSpacing:"0.05em"}}>
+                {f.n}. {f.l.toUpperCase()}
+              </div>
+              <div style={{fontSize:9,marginTop:1,color:f.s==="done"?C.green:f.s==="active"?C.blue:C.muted}}>
+                {f.s==="done"?"●":f.s==="active"?"◐":"○"}
+              </div>
+            </div>
+            {i<6&&<div style={{fontSize:8,color:C.border}}>▶</div>}
+          </div>
+      ))}
+    </div>
+  </div>
+
+  {/* Tab Bar */}
+  <div style={{display:"flex",gap:5,marginBottom:20,flexWrap:"wrap"}}>
+    {TABS.map(t=>(
+      <button key={t.id} onClick={()=>setTab(t.id)} style={{
+        padding:"6px 14px",borderRadius:6,fontSize:11,fontFamily:C.mono,
+        letterSpacing:"0.06em",textTransform:"uppercase",
+        background:tab===t.id?"#162a52":"transparent",
+        color:tab===t.id?"#93c5fd":C.muted,
+        border:`1px solid ${tab===t.id?"#3b5a9a":C.border}`,
+        fontWeight:tab===t.id?700:400,
+      }}>{t.l}</button>
+    ))}
+  </div>
+
+  {/* Business Selector */}
+  {bizTabs.includes(tab)&&(
+    <div style={{display:"flex",gap:8,marginBottom:20}}>
+      {Object.entries(BIZ).map(([id,m])=>(
+        <button key={id} onClick={()=>setBiz(id)} style={{
+          padding:"8px 20px",borderRadius:6,fontSize:13,
+          background:biz===id?`${m.color}18`:C.surface,
+          color:biz===id?m.color:C.sub,
+          border:`1px solid ${biz===id?m.color:C.border}`,
+          fontWeight:biz===id?700:400,
+        }}>{m.icon} {m.label}</button>
+      ))}
+    </div>
+  )}
+
+  {/* ── TAB CONTENT ── */}
+
+  {tab==="situation"&&(
+    <div className="fade-in">
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
+        {[{l:"Brent Crude",v:"$96.24/bbl",sub:"+30% since Feb 27",c:C.amber},
+          {l:"Gulf Airspace",v:"CLOSED",sub:"14,000+ flights cancelled",c:C.red},
+          {l:"EU Gas Storage",v:"~28% full",sub:"Record seasonal low",c:C.red},
+          {l:"Stagflation",v:"CONFIRMED",sub:"BofA base case Apr 2",c:C.amber}]
+          .map((s,i)=>(
+            <div key={i} style={{background:C.surface,border:`1px solid ${s.c}44`,borderRadius:8,padding:14}}>
+              <div style={{fontSize:9,color:C.muted,fontFamily:C.mono,textTransform:"uppercase",letterSpacing:"0.08em"}}>{s.l}</div>
+              <div style={{fontSize:20,fontWeight:900,color:s.c,fontFamily:C.mono,margin:"6px 0 4px"}}>{s.v}</div>
+              <div style={{fontSize:11,color:C.sub}}>{s.sub}</div>
+            </div>
+        ))}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+        <MacroTable title="Force 4 — Energy" icon="⚡" rows={MACRO.energy}/>
+        <MacroTable title="Force 1 — Geopolitics" icon="🌐" rows={MACRO.geo}/>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <MacroTable title="Force 7 — Economy" icon="📊" rows={MACRO.economy}/>
+        <MacroTable title="Force 5 — AI" icon="🤖" rows={MACRO.ai}/>
+      </div>
+    </div>
+  )}
+
+  {tab==="forecasts"&&(
+    <div className="fade-in" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      {FORECASTS.map(f=><ForecastCard key={f.id} f={f}/>)}
+    </div>
+  )}
+
+  {tab==="exodus"&&(
+    <div className="fade-in">
+      <div style={{background:C.redD,border:`2px solid ${C.red}`,borderRadius:8,
+        padding:"12px 16px",marginBottom:16,display:"flex",justifyContent:"space-between",
+        alignItems:"center",flexWrap:"wrap",gap:12}}>
+        <div>
+          <div style={{fontSize:10,color:C.red,fontFamily:C.mono,letterSpacing:"0.1em"}}>⚠ OPPORTUNITY SIGNAL — VALIDATED · FTI FAST+HIGH QUADRANT</div>
+          <div style={{fontSize:20,fontWeight:900,color:C.text,marginTop:4}}>Gulf Expat Exodus: Significant Departure Wave Confirmed</div>
+          <div style={{fontSize:12,color:C.sub,marginTop:4}}>10–15% UAE population departed in 6 weeks · Finance sector offices empty · Hotels at 16% occupancy</div>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:9,color:C.amber,fontFamily:C.mono}}>FIRST-MOVER WINDOW</div>
+          <div style={{fontSize:24,fontWeight:900,color:C.amber,fontFamily:C.mono}}>4–8 WEEKS</div>
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
+        {EXODUS_FACTS.map((f,i)=>(
+          <div key={i} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,padding:12}}>
+            <div style={{fontSize:22}}>{f.icon}</div>
+            <div style={{fontSize:22,fontWeight:900,color:C.red,fontFamily:C.mono,lineHeight:1,margin:"4px 0"}}>{f.stat}</div>
+            <div style={{fontSize:11,color:C.text,fontWeight:600}}>{f.label}</div>
+            <div style={{fontSize:10,color:C.muted,marginTop:2}}>{f.sub}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:14}}>
+          <SL>Departure severity by country</SL>
+          {[{c:"UAE",r:"SIGNIFICANT → MASS EXODUS",p:"10–15%",col:C.red},
+            {c:"Qatar",r:"SIGNIFICANT (structural)",p:"Layoffs confirmed",col:C.amber},
+            {c:"Saudi Arabia",r:"MODERATE DRIFT",p:"~5,000 Americans",col:C.green}]
+            .map((row,i)=>(
+              <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                padding:"8px 0",borderBottom:`1px solid ${C.border}66`}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:C.text}}>{row.c}</div>
+                  <div style={{fontSize:10,color:row.col}}>{row.r}</div>
+                </div>
+                <Pill color={row.col}>{row.p}</Pill>
+              </div>
+          ))}
+        </div>
+        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:14}}>
+          <SL>Where they're relocating — Italy is in demand</SL>
+          {[{d:"UK (London)",n:"First wave; tax trap → onward to EU",hot:true},
+            {d:"Italy",n:"Flat-tax, lifestyle, ASHA location ← OUR OPPORTUNITY",hot:true},
+            {d:"Portugal",n:"D7/D8 visa but 40-month backlog",hot:false},
+            {d:"Greece",n:"Golden Visa; actively targeting GCC at IREX 2026",hot:false},
+            {d:"Spain",n:"Beckham Law 24% flat tax, 6 years",hot:false},
+            {d:"Cyprus",n:"Non-dom: 17yr dividend/interest exemption",hot:false}]
+            .map((d,i)=>(
+              <div key={i} style={{display:"flex",gap:8,padding:"6px 0",borderBottom:`1px solid ${C.border}55`}}>
+                <span style={{fontSize:10,marginTop:1}}>{d.hot?"🎯":"›"}</span>
+                <div>
+                  <span style={{fontSize:12,fontWeight:d.hot?700:400,color:d.hot?C.gold:C.text}}>{d.d}</span>
+                  <span style={{fontSize:10,color:C.muted,marginLeft:6}}>{d.n}</span>
+                </div>
+              </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )}
+
+  {tab==="quadrant"&&(
+    <div className="fade-in">
+      <div style={{background:C.surface,border:`1px solid ${BIZ[biz].color}44`,borderRadius:8,padding:20}}>
+        <SL>FTI Strategic Quadrant · {BIZ[biz].icon} {BIZ[biz].label} · Speed × Revenue Impact</SL>
+        <div style={{fontSize:12,color:C.sub,marginBottom:20,lineHeight:1.6}}>
+          Hover any bubble to see the full move — which existing asset it uses, the specific action, and why now. Q1 (top-right) = low hanging fruit to act on this week.
+        </div>
+        <StrategicQuadrant bizId={biz}/>
+        <div style={{display:"flex",gap:16,marginTop:20,flexWrap:"wrap"}}>
+          {Object.entries(QC).map(([q,v])=>(
+            <div key={q} style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:10,height:10,borderRadius:"50%",background:v.c}}/>
+              <span style={{fontSize:10,color:C.sub}}><span style={{color:v.c,fontFamily:C.mono}}>{q}:</span> {v.l}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )}
+
+  {tab==="matrix"&&(
+    <div className="fade-in">
+      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:20}}>
+        <SL>All Moves · All 3 Businesses · Gulf Expat Opportunity × Existing Assets</SL>
+        <div style={{fontSize:12,color:C.sub,marginBottom:16,lineHeight:1.6,
+          background:C.raised,borderRadius:6,padding:"10px 14px",borderLeft:`3px solid ${C.gold}`}}>
+          <strong style={{color:C.gold}}>Cross-business synergy:</strong> Same displaced Gulf CEO → ASHA (AOB reset) → BuilderBee (operations rebuild) → Centaurion (AI governance for new European structure). One person, three revenue streams.
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table>
+            <thead>
+              <tr>{["Move","Business","Existing Asset","Action This Week","Revenue Target","When"].map((h,i)=>(
+                <th key={i} style={{padding:"9px 12px",textAlign:"left",background:C.raised,
+                  color:C.muted,fontFamily:C.mono,fontSize:9,letterSpacing:"0.08em",
+                  textTransform:"uppercase",borderBottom:`1px solid ${C.border}`}}>{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody>
+              {ALL_MOVES.map((r,i)=>(
+                <tr key={i} style={{borderBottom:`1px solid ${C.border}55`,
+                  background:i%2===0?"transparent":`${C.surface}88`}}>
+                  <td style={{padding:"8px 12px"}}><Tag c={r.bc} bg={`${r.bc}18`}>{r.id}</Tag></td>
+                  <td style={{padding:"8px 12px",color:r.bc,fontWeight:700,fontSize:11}}>{r.biz}</td>
+                  <td style={{padding:"8px 12px",color:C.sub,fontSize:11}}>{r.asset}</td>
+                  <td style={{padding:"8px 12px",color:C.text,fontWeight:600,fontSize:11}}>{r.action}</td>
+                  <td style={{padding:"8px 12px"}}><Pill color={C.amber}>{r.rev}</Pill></td>
+                  <td style={{padding:"8px 12px"}}>
+                    <Pill color={r.when==="48 hours"?C.red:r.when==="This week"?C.amber:C.blue}>{r.when}</Pill>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {tab==="scenarios"&&(
+    <div className="fade-in">
+      <div style={{background:C.surface,border:`1px solid ${BIZ[biz].color}44`,borderRadius:8,padding:20}}>
+        <SL>FTI Stage 3 — Axes of Uncertainty · {BIZ[biz].icon} {BIZ[biz].label}</SL>
+        <div style={{fontSize:12,color:C.sub,marginBottom:20,lineHeight:1.6}}>
+          Two critical uncertainties from different categories → 2×2 matrix → four first-draft scenarios. Quadrants reveal near/long-term risks and opportunities per the FTI methodology.
+        </div>
+        <AxesMatrix biz={biz}/>
+      </div>
+    </div>
+  )}
+
+  {tab==="framings"&&(
+    <div className="fade-in">
+      <SL>FTI Stage 6 — Emotive Framings · {BIZ[biz].icon} {BIZ[biz].label} · "How did we act in the present?"</SL>
+      <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+        {["optimistic","neutral","catastrophic"].map(type=>(
+          <div key={type} style={{flex:"1 1 260px"}}>
+            <EmotiveCard type={type} data={FRAMINGS[biz][type]}/>
+          </div>
+        ))}
+      </div>
+    </div>
+  )}
+
+  {tab==="backcast"&&(
+    <div className="fade-in">
+      <SL>FTI Stage 7 — Backcasting · {BIZ[biz].icon} {BIZ[biz].label} · April 2026 → Q4 2027</SL>
+      <div style={{display:"flex",gap:16,fontSize:10,fontFamily:C.mono,color:C.muted,marginBottom:20}}>
+        <span style={{color:C.blue}}>■ ACTION</span>
+        <span style={{color:C.green}}>● OPPORTUNITY</span>
+        <span style={{color:C.red}}>▲ RISK</span>
+      </div>
+      <BackcastTimeline biz={biz}/>
+    </div>
+  )}
+
+  {tab==="asha"&&(
+    <div className="fade-in">
+      <div style={{background:C.surface,border:`1px solid ${C.gold}44`,borderRadius:8,padding:20}}>
+        <SL>ASHA Italy · Gulf Expat Residency Package · Product Design + Channel Strategy</SL>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+          <div>
+            <div style={{fontSize:16,fontWeight:800,color:C.text,marginBottom:12}}>"A Place to Land. A Place to Reset."</div>
+            {[{l:"Duration",v:"2, 4, or 8 weeks"},{l:"Daily anchor",v:"Breathwork + somatic processing"},
+              {l:"Remote work infra",v:"High-speed WiFi, private workspace"},{l:"Community",v:"Cohort of fellow Gulf relocators"},
+              {l:"Advisory",v:"Weekly 'next chapter' integration session"},{l:"Lifestyle",v:"Italian countryside, chef-prepared meals"}]
+              .map((r,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${C.border}66`}}>
+                  <span style={{fontSize:11,color:C.muted}}>{r.l}</span>
+                  <span style={{fontSize:11,color:C.text,fontWeight:600}}>{r.v}</span>
+                </div>
+            ))}
+            <div style={{marginTop:16,background:C.goldD,borderRadius:6,padding:14}}>
+              <div style={{fontSize:9,color:C.gold,fontFamily:C.mono,marginBottom:8}}>PRICING (within Dubai expat housing budget)</div>
+              {[{l:"2-week intensive",p:"€3,500"},{l:"Monthly residency",p:"€6,000–12,000"}]
+                .map((p,i)=>(
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                    <span style={{fontSize:12,color:C.text}}>{p.l}</span>
+                    <span style={{fontSize:16,fontWeight:800,color:C.gold,fontFamily:C.mono}}>{p.p}</span>
+                  </div>
+              ))}
+            </div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            <div style={{background:C.raised,borderRadius:8,padding:14}}>
+              <SL>Framing — NOT "Refuge"</SL>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {[{bad:"Refuge",good:"Reset base"},{bad:"Displaced",good:"Strategic pivot"},
+                  {bad:"Fleeing conflict",good:"Choosing clarity"},{bad:"Uncertain",good:"Intentional transition"}]
+                  .map((f,i)=>(
+                    <div key={i} style={{background:C.bg,borderRadius:4,padding:8}}>
+                      <div style={{fontSize:10,color:C.red,textDecoration:"line-through"}}>✗ {f.bad}</div>
+                      <div style={{fontSize:11,color:C.green,marginTop:4}}>✓ {f.good}</div>
+                    </div>
+                ))}
+              </div>
+            </div>
+            <div style={{background:C.raised,borderRadius:8,padding:14}}>
+              <SL>Target channels — outreach this week</SL>
+              {[{c:"Citrus Relocation (UK)",n:"Gulf→UK specialist; surge in 2026"},
+                {c:"ISS Relocation",n:"UAE corporate evacuee logistics partner"},
+                {c:"Newland Chase",n:"Published 2026 Gulf mobility crisis guide"},
+                {c:"r/dubai Reddit",n:"Active expat exodus discussion threads"},
+                {c:"LinkedIn #DubaiExpats",n:"High engagement post-conflict"},
+                {c:"AOB facilitator network",n:"Gulf-based facilitators as warm channel"}]
+                .map((ch,i)=>(
+                  <div key={i} style={{display:"flex",gap:8,padding:"5px 0",borderBottom:`1px solid ${C.border}55`}}>
+                    <span style={{color:C.blue,fontSize:10}}>›</span>
+                    <div>
+                      <span style={{fontSize:11,color:C.text,fontWeight:600}}>{ch.c}</span>
+                      <span style={{fontSize:10,color:C.muted,marginLeft:6}}>{ch.n}</span>
+                    </div>
+                  </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {/* Footer */}
+  <div style={{marginTop:28,paddingTop:14,borderTop:`1px solid ${C.border}`,
+    display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+    <div style={{fontSize:9,color:C.muted,fontFamily:C.mono}}>
+      FTI 7-STEP · CIPHER · AXES OF UNCERTAINTY · EMOTIVE FRAMINGS · BACKCASTING · v3.0 CONSOLIDATED
+    </div>
+    <div style={{fontSize:9,color:C.muted,fontFamily:C.mono}}>
+      CENTAURION.ME/STRATEGIC-FORESIGHT-DASHBOARD © 2026
+    </div>
+  </div>
+</div>
+```
+
+);
+}
+
+ReactDOM.createRoot(document.getElementById(“root”)).render(<App/>);
+</script>
+
+</body>
+</html>
