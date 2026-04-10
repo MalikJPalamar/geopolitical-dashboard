@@ -861,6 +861,7 @@ export default function App() {
     business:     <BusinessImpactTab  live={live} loading={loadMkt} />,
     human:        <HumanCostTab       />,
     geopolitical: <GeopoliticalTab    />,
+    scenarios:    <ScenarioTab        live={live} />,
     news:         <NewsTab            news={news} onRefresh={refreshNews} loading={loadNews} error={newsErr} />,
     digest:       <DigestTab          live={live} />,
   }
