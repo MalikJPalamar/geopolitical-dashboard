@@ -1,0 +1,15 @@
+# Cloudflare Pages configuration
+name = "geopolitical-lens"
+compatibility_date = "2024-01-01"
+
+[site]
+bucket = "./dist"
+
+[[routes]]
+pattern = "/geopolitical-lens/*"
+zone_name = "centaurion.me"
+
+# Environment variables (set in Cloudflare dashboard)
+# ANTHROPIC_API_KEY = "your-key-here"
+# NODE_ENV = "production"
+# BASE_PATH = "/geopolitical-lens"
