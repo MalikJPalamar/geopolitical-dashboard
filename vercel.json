@@ -16,6 +16,14 @@
   ],
   "routes": [
     {
+      "src": "/strategic-foresight-dashboard",
+      "dest": "/dist/strategic-foresight-dashboard/index.html"
+    },
+    {
+      "src": "/strategic-foresight-dashboard/(.*)",
+      "dest": "/dist/strategic-foresight-dashboard/$1"
+    },
+    {
       "src": "/geopolitical-lens/api/(.*)",
       "dest": "/server/index.js"
     },
