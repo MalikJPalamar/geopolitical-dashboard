@@ -659,6 +659,154 @@ function GeopoliticalTab() {
 }
 
 // ─── MAIN APP SHELL ─────────────────────────────────────────
+
+// ─── SCENARIO MODELLER TAB ────────────────────────────────────────────────────
+const SCENARIOS = {
+  ceasefire: {
+    id:'ceasefire', label:'☮ Ceasefire Holds', color:C.green,
+    desc:'Islamabad deal signed. Hormuz stays open. Iran sanctions eased over 6 months.',
+    deltas:{ brent:-18, vix:-35, gold:-8, bdi:-12, ita_pct:-8, xle_pct:-14, icln_pct:+6, jets_pct:+18, spain_diesel:-9, war_risk_pct:-60 },
+    horizon:'3–6 months', key_risk:'Lebanon ceasefire fragile. IRGC hardliners could derail.',
+  },
+  collapse: {
+    id:'collapse', label:'💥 Ceasefire Collapses', color:C.red,
+    desc:'Islamabad talks fail. IRGC mines Hormuz again. Oil spikes to $130+.',
+    deltas:{ brent:+35, vix:+55, gold:+12, bdi:+28, ita_pct:+14, xle_pct:+22, icln_pct:+8, jets_pct:-22, spain_diesel:+18, war_risk_pct:+120 },
+    horizon:'1–3 months', key_risk:'US carrier group response. Potential regional escalation.',
+  },
+  islamabad: {
+    id:'islamabad', label:'🤝 Islamabad Grand Deal', color:C.blue,
+    desc:'Full nuclear framework agreed. US sanctions lifted. Iranian oil re-enters market.',
+    deltas:{ brent:-28, vix:-42, gold:-14, bdi:-18, ita_pct:-18, xle_pct:-22, icln_pct:+12, jets_pct:+28, spain_diesel:-16, war_risk_pct:-80 },
+    horizon:'6–18 months', key_risk:'US Senate ratification. Israel objection. IAEA timeline.',
+  },
+}
+
+const M_META = {
+  brent:{label:'Brent Crude',unit:'$/bbl'}, vix:{label:'VIX',unit:'pts'},
+  gold:{label:'Gold',unit:'$/oz'}, bdi:{label:'Baltic Dry',unit:'pts'},
+  ita_pct:{label:'Defense ETF%',unit:'%'}, xle_pct:{label:'Energy ETF%',unit:'%'},
+  icln_pct:{label:'Renewables%',unit:'%'}, jets_pct:{label:'Airlines%',unit:'%'},
+  spain_diesel:{label:'Spain Diesel',unit:'€/L'}, war_risk_pct:{label:'War Risk',unit:'%'},
+}
+
+function ScenarioTab({ live }) {
+  const [active, setActive] = useState('ceasefire')
+  const [conf, setConf] = useState({ ceasefire:55, collapse:25, islamabad:20 })
+  const s = SCENARIOS[active]
+  const base = live ? { ...B, ...live } : B
+  const total = Object.values(conf).reduce((a,b) => a+b, 0)
+
+  const ev = (key) => {
+    const bv = parseFloat(base[key] ?? 0)
+    if (!bv) return '—'
+    return Object.values(SCENARIOS).reduce((sum, sc) =>
+      sum + bv * (1 + (sc.deltas[key]||0)/100) * ((conf[sc.id]||0)/Math.max(total,1)), 0
+    ).toFixed(2)
+  }
+
+  return (
+    <div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:14 }}>
+        {Object.values(SCENARIOS).map(sc => (
+          <div key={sc.id} onClick={() => setActive(sc.id)} style={{ background: active===sc.id ? sc.color+'15' : C.surface, border:`1px solid ${active===sc.id ? sc.color : C.border}`, borderRadius:3, padding:'12px 14px', cursor:'pointer' }}>
+            <div style={{ fontSize:11, fontWeight:700, color:active===sc.id ? sc.color : C.bright, fontFamily:'monospace', marginBottom:4 }}>{sc.label}</div>
+            <div style={{ fontSize:9, color:C.text, fontFamily:'monospace', lineHeight:1.5, marginBottom:8 }}>{sc.desc}</div>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <input type="range" min={0} max={100} value={conf[sc.id]}
+                onChange={e => setConf(p => ({...p,[sc.id]:parseInt(e.target.value)}))}
+                onClick={e => e.stopPropagation()} style={{ flex:1, accentColor:sc.color }} />
+              <span style={{ fontSize:12, fontWeight:700, color:sc.color, fontFamily:'monospace', minWidth:36 }}>{conf[sc.id]}%</span>
+            </div>
+            <div style={{ fontSize:9, color:C.textDim, fontFamily:'monospace', marginTop:4 }}>Horizon: {sc.horizon}</div>
+          </div>
+        ))}
+      </div>
+
+      {total !== 100 && <div style={{ background:C.amber+'10', border:`1px solid ${C.amber}25`, borderRadius:2, padding:'6px 12px', marginBottom:12, fontSize:10, color:C.amber, fontFamily:'monospace' }}>⚠ Weights sum to {total}% — adjust to 100% for accurate expected values</div>}
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
+        <Card>
+          <Lbl color={s.color}>{s.label} — Projected Impacts</Lbl>
+          <div style={{ display:'flex', flexDirection:'column', gap:5, marginTop:8 }}>
+            {Object.entries(M_META).map(([key, meta]) => {
+              const bv = parseFloat(base[key] ?? 0)
+              const delta = s.deltas[key] || 0
+              const proj = bv ? (bv*(1+delta/100)).toFixed(2) : '—'
+              const up = delta > 0
+              return (
+                <div key={key} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'4px 0', borderBottom:`1px solid ${C.border}` }}>
+                  <span style={{ fontSize:10, color:C.text, fontFamily:'monospace' }}>{meta.label}</span>
+                  <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                    <span style={{ fontSize:9, color:C.textDim, fontFamily:'monospace' }}>{bv||'—'}</span>
+                    <span style={{ fontSize:9, color:C.textDim }}>→</span>
+                    <span style={{ fontSize:11, fontWeight:700, color:up?C.red:C.green, fontFamily:'monospace' }}>{proj}</span>
+                    <span style={{ fontSize:9, color:up?C.red:C.green, fontFamily:'monospace' }}>{up?'+':''}{delta}%</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          <Card>
+            <Lbl>Expected Value (probability-weighted)</Lbl>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8 }}>
+              {['brent','vix','spain_diesel','bdi','ita_pct','jets_pct'].map(key => (
+                <div key={key} style={{ background:C.surfaceHi, borderRadius:2, padding:'6px 8px' }}>
+                  <div style={{ fontSize:8, color:C.textDim, fontFamily:'monospace', textTransform:'uppercase', marginBottom:2 }}>{M_META[key].label}</div>
+                  <div style={{ fontSize:16, fontWeight:700, color:C.white, fontFamily:'monospace' }}>{ev(key)}</div>
+                  <div style={{ fontSize:8, color:C.textDim, fontFamily:'monospace' }}>{M_META[key].unit}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop:8, fontSize:9, color:C.textDim, fontFamily:'monospace' }}>
+              Weights: Ceasefire {conf.ceasefire}% · Collapse {conf.collapse}% · Islamabad {conf.islamabad}%
+            </div>
+          </Card>
+          <Card>
+            <Lbl color={C.amber}>Key Risk</Lbl>
+            <div style={{ fontSize:11, color:C.text, fontFamily:'monospace', lineHeight:1.7, marginTop:6 }}>{s.key_risk}</div>
+            <div style={{ marginTop:10 }}>
+              <Lbl>Business Impact (Spain)</Lbl>
+              {[
+                { label:'Logistics / fuel', up:s.deltas.brent>0 },
+                { label:'Energy bills', up:s.deltas.spain_diesel>0 },
+                { label:'USD vendor contracts', up:s.deltas.vix>0 },
+              ].map((r,i) => (
+                <div key={i} style={{ display:'flex', justifyContent:'space-between', marginTop:5 }}>
+                  <span style={{ fontSize:10, color:C.text, fontFamily:'monospace' }}>{r.label}</span>
+                  <Badge label={r.up?'PRESSURE ↑':'EASING ↓'} color={r.up?C.red:C.green} />
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      <Card>
+        <Lbl>Scenario Comparison — Brent Crude ($/bbl)</Lbl>
+        <div style={{ display:'flex', gap:8, marginTop:12, alignItems:'flex-end', height:90 }}>
+          {Object.values(SCENARIOS).map(sc => {
+            const bv = parseFloat(base.brent ?? 96.80)
+            const proj = bv * (1 + (sc.deltas.brent||0)/100)
+            const h = Math.max(6, ((proj-60)/80)*80)
+            return (
+              <div key={sc.id} onClick={() => setActive(sc.id)} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4, cursor:'pointer' }}>
+                <span style={{ fontSize:11, fontWeight:700, color:sc.color, fontFamily:'monospace' }}>${proj.toFixed(0)}</span>
+                <div style={{ width:'100%', height:h, background:active===sc.id ? sc.color : sc.color+'55', borderRadius:2, transition:'all 0.3s' }} />
+                <span style={{ fontSize:9, color:active===sc.id?sc.color:C.textDim, fontFamily:'monospace', textAlign:'center', fontWeight:active===sc.id?700:400 }}>{sc.label.replace(/^\S+ /,'')}</span>
+              </div>
+            )
+          })}
+        </div>
+        <div style={{ marginTop:6, fontSize:9, color:C.textDim, fontFamily:'monospace' }}>Baseline: ${parseFloat(base.brent??96.80).toFixed(2)}/bbl · Click bar to select</div>
+      </Card>
+    </div>
+  )
+}
+
 const TABS = [
   { id: 'overview',     label: 'OVERVIEW'      },
   { id: 'markets',      label: 'MARKETS'       },
@@ -669,6 +817,7 @@ const TABS = [
   { id: 'geopolitical', label: 'GEOPOLITICAL'  },
   { id: 'news',         label: '⟳ NEWS'        },
   { id: 'digest',       label: '◆ DIGEST'      },
+  { id: 'scenarios',    label: '⚡ SCENARIOS'   },
 ]
 
 export default function App() {
