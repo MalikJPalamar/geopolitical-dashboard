@@ -246,12 +246,429 @@ function DigestTab({ live }) {
   )
 }
 
+// ─── SUPPLY CHAIN TAB ───────────────────────────────────────
+function SupplyChainTab({ live, loading }) {
+  const bdi      = val(live, 'bdi')
+  const wr       = val(live, 'war_risk_pct')
+  const hormuz   = val(live, 'hormuz_open')
+  const ttf      = val(live, 'ttf')
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 14 }}>
+        {[
+          { label: 'Baltic Dry Index',      v: loading ? null : bdi.toLocaleString(),    col: C.amber,  sub: '+49% vs pre-conflict',          k: 'bdi'          },
+          { label: 'War Risk Insurance',    v: loading ? null : `${wr}%`,                col: C.red,    sub: 'Down from 6.8% peak',            k: 'war_risk_pct' },
+          { label: 'TTF Gas (EUR/MWh)',     v: loading ? null : `€${ttf}`,              col: C.amber,  sub: '+38% since Feb 27',              k: 'ttf'          },
+          { label: 'Hormuz Status',         v: hormuz ? 'REOPENING' : 'CLOSED',          col: hormuz ? C.green : C.red, sub: hormuz ? 'Ceasefire condition' : 'Blockaded', k: 'hormuz_open' },
+          { label: 'VLCC Tanker Rates',     v: '+62%',    col: C.amber,  sub: 'vs Feb 27 — easing from peak'  },
+          { label: 'Hormuz Transits/Day',   v: hormuz ? '~17' : '0',  col: hormuz ? C.green : C.red, sub: 'Pre-war: ~21 vessels/day'  },
+          { label: 'Ras Laffan LNG',        v: 'PARTIAL', col: C.amber,  sub: 'Qatar output at ~70% capacity'  },
+          { label: 'South Pars Gas Field',  v: 'IMPAIRED',col: C.red,    sub: 'Struck Mar 18 · partially restored'},
+        ].map((m, i) => (
+          <Card key={i} style={{ padding: '12px 14px' }}>
+            <Lbl>{m.label}</Lbl>
+            {m.v === null ? <Skel h={26} /> : (
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                <span style={{ fontSize: 20, fontWeight: 700, color: m.col, fontFamily: 'monospace' }}>{m.v}</span>
+                {m.k && <Dot live={isLv(live, m.k)} />}
+              </div>
+            )}
+            <div style={{ fontSize: 10, color: C.text, marginTop: 5, fontFamily: 'monospace' }}>{m.sub}</div>
+          </Card>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <Card>
+          <Lbl>Baltic Dry Index — Conflict Arc</Lbl>
+          <div style={{ fontSize: 11, color: C.textDim, fontFamily: 'monospace', marginBottom: 8 }}>Global dry bulk shipping demand proxy</div>
+          <MiniArea data={SHIPPING_HISTORY} dataKey="bdi" color={C.amber} height={110} />
+          <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+            {[['Pre-conflict', '1,820', C.textDim], ['Peak (Mar 18)', '3,050', C.red], ['Now', bdi.toLocaleString(), C.amber]].map(([l,v,c]) => (
+              <div key={l}>
+                <div style={{ fontSize: 9, color: C.textDim, fontFamily: 'monospace' }}>{l}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: c, fontFamily: 'monospace' }}>{v}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card>
+          <Lbl>War Risk Insurance Premium %</Lbl>
+          <div style={{ fontSize: 11, color: C.textDim, fontFamily: 'monospace', marginBottom: 8 }}>Hull & cargo surcharge for Hormuz/Gulf transits</div>
+          <MiniArea data={SHIPPING_HISTORY} dataKey="wr" color={C.red} height={110} />
+          <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+            {[['Pre-conflict', '0.5%', C.textDim], ['Peak (Mar 18)', '6.8%', C.red], ['Now', `${wr}%`, C.amber]].map(([l,v,c]) => (
+              <div key={l}>
+                <div style={{ fontSize: 9, color: C.textDim, fontFamily: 'monospace' }}>{l}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: c, fontFamily: 'monospace' }}>{v}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+// ─── AI & DATA CENTERS TAB ──────────────────────────────────
+function AIDataCentersTab() {
+  const regions = [
+    { name: 'UAE (Dubai / Abu Dhabi)', risk: 82, status: 'HIGH RISK', col: C.red,    detail: 'Microsoft, G42, Nvidia cluster — within missile range; partial evacuations' },
+    { name: 'Saudi Arabia (Riyadh)',   risk: 61, status: 'ELEVATED',  col: C.amber,  detail: 'AWS Riyadh, Aramco DC — air-defence active, no direct strikes' },
+    { name: 'Qatar (Doha)',            risk: 55, status: 'ELEVATED',  col: C.amber,  detail: 'Ooredoo / Microsoft — Ras Laffan power disruption risk' },
+    { name: 'Bahrain (AWS me-south-1)',risk: 48, status: 'MODERATE',  col: C.amber,  detail: 'Redundant routing active; US 5th Fleet presence provides deterrence' },
+    { name: 'Israel (Tel Aviv)',        risk: 38, status: 'MODERATE',  col: C.blue,   detail: 'AWS & Google nodes; Iron Dome operational, cyber incidents elevated' },
+    { name: 'Jordan (Aqaba)',           risk: 22, status: 'LOW',       col: C.green,  detail: 'Edge nodes only; out of primary conflict zone' },
+  ]
+
+  const incidents = [
+    { date: 'Mar 4',  type: 'CYBER',    desc: 'Iran-linked actors breach Israeli IDF logistics portal; data exfiltrated' },
+    { date: 'Mar 9',  type: 'PHYSICAL', desc: 'Ballistic missile damages power grid 12km from AWS Bahrain zone' },
+    { date: 'Mar 12', type: 'CYBER',    desc: 'DDoS against UAE banking infra; attributed to Hezbollah cyber unit' },
+    { date: 'Mar 18', type: 'PHYSICAL', desc: 'South Pars strike disrupts power; Qatar DCs switch to diesel backup' },
+    { date: 'Mar 25', type: 'CYBER',    desc: 'Attempted intrusion into Saudi Aramco SCADA — blocked by Claroty sensors' },
+    { date: 'Apr 2',  type: 'CYBER',    desc: 'Israeli AI firm Mobileye suffers breach; autonomous vehicle data targeted' },
+    { date: 'Apr 8',  type: 'PHYSICAL', desc: 'Ceasefire — evacuation orders lifted for UAE; DCs return to normal ops' },
+  ]
+
+  const hyperscalers = [
+    { name: 'Microsoft Azure', exposure: 'HIGH',   detail: 'UAE (G42 partnership), Qatar, Israel nodes — partial workload migration to EU' },
+    { name: 'AWS',             exposure: 'HIGH',   detail: 'me-south-1 (Bahrain), Saudi — maintained ops with degraded latency' },
+    { name: 'Google Cloud',    exposure: 'MEDIUM', detail: 'Tel Aviv, Saudi — traffic rerouted via europe-west during peak' },
+    { name: 'Oracle',          exposure: 'MEDIUM', detail: 'Abu Dhabi sovereign cloud — UAE government customer at risk' },
+    { name: 'Nvidia',          exposure: 'HIGH',   detail: 'H100 cluster (G42/UAE) — export licence review triggered by conflict' },
+  ]
+
+  const expCol = { HIGH: C.red, MEDIUM: C.amber, LOW: C.green }
+  const incCol = { CYBER: C.purple, PHYSICAL: C.red }
+
+  return (
+    <div>
+      <div style={{ background: C.purple + '10', border: `1px solid ${C.purple}30`, borderRadius: 3, padding: '10px 16px', marginBottom: 14, fontFamily: 'monospace', fontSize: 10, color: C.bright }}>
+        ◈ Gulf AI infrastructure at acute risk — 6 hyperscaler regions within 800km of conflict zone · 7 documented incidents since Feb 27
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+        <Card>
+          <Lbl>At-Risk DC Regions — Threat Level</Lbl>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+            {regions.map(r => (
+              <div key={r.name}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 10, color: C.bright, fontFamily: 'monospace' }}>{r.name}</span>
+                  <Badge label={r.status} color={r.col} />
+                </div>
+                <ProgBar pct={r.risk} color={r.col} />
+                <div style={{ fontSize: 9, color: C.textDim, fontFamily: 'monospace', marginTop: 3 }}>{r.detail}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <Lbl>Hyperscaler Exposure</Lbl>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+            {hyperscalers.map(h => (
+              <div key={h.name} style={{ padding: '8px 10px', background: C.surfaceHi, borderRadius: 2, borderLeft: `2px solid ${expCol[h.exposure] || C.text}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                  <span style={{ fontSize: 11, color: C.white, fontFamily: 'monospace', fontWeight: 700 }}>{h.name}</span>
+                  <Badge label={h.exposure} color={expCol[h.exposure]} />
+                </div>
+                <div style={{ fontSize: 9, color: C.textDim, fontFamily: 'monospace' }}>{h.detail}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <Card>
+        <Lbl>AI Warfare & Cyber Incidents — Chronological Log</Lbl>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+          {incidents.map((inc, i) => (
+            <div key={i} style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: i < incidents.length - 1 ? `1px solid ${C.border}` : 'none', alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 9, color: C.textDim, fontFamily: 'monospace', minWidth: 40, paddingTop: 2 }}>{inc.date}</span>
+              <Badge label={inc.type} color={incCol[inc.type] || C.text} />
+              <span style={{ fontSize: 10, color: C.bright, fontFamily: 'monospace', flex: 1, lineHeight: 1.5 }}>{inc.desc}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+// ─── BUSINESS IMPACT TAB ────────────────────────────────────
+function BusinessImpactTab({ live, loading }) {
+  const losers = [
+    { sector: 'Commercial Aviation',  impact: -24, detail: 'Gulf airspace closures add 2–4h to Asia-Europe routes; fuel surcharges +35%' },
+    { sector: 'Road Haulage (EU)',     impact: -18, detail: 'Diesel €1.89/L; long-haul operators squeezed; some routes suspended' },
+    { sector: 'Food & Agri (importers)',impact: -16, detail: 'Fertiliser (gas-linked) +38%; Middle East wheat import costs surge' },
+    { sector: 'Tourism (Gulf)',        impact: -41, detail: 'Dubai hotel occupancy -41% YoY; cruise cancellations through Hormuz' },
+    { sector: 'Petrochemical Buyers', impact: -22, detail: 'Naphtha, LPG supply disrupted; EU plastic feedstock shortages' },
+    { sector: 'Container Shipping',   impact: -14, detail: 'Rerouting via Cape of Good Hope adds 12 days; capacity crunch' },
+  ]
+
+  const winners = [
+    { sector: 'Defence & Aerospace',   impact: +19, detail: 'ITA ETF +19%; Raytheon, Lockheed, Thales order books surge' },
+    { sector: 'Energy Producers',      impact: +18, detail: 'XLE +18%; North Sea, US shale, Norwegian majors benefit from $97 Brent' },
+    { sector: 'Solar & Renewables',    impact: +11, detail: 'ICLN +11%; EU fast-tracks energy independence agenda' },
+    { sector: 'Cybersecurity',         impact: +28, detail: 'CrowdStrike, Palo Alto revenue uplift; government contracts surge' },
+    { sector: 'Gold & Safe Havens',    impact: +10, detail: 'Gold +10%; CHF, JPY appreciate; capital flight from EM' },
+    { sector: 'LNG Exporters (US/AUS)',impact: +32, detail: 'Spot LNG $56/MWh; Cheniere, Woodside record revenues' },
+  ]
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+        {[
+          { label: 'Est. Global Trade Loss', v: '$420B',  sub: 'Cumulative 40-day impact', col: C.red   },
+          { label: 'EU GDP Impact',          v: '-0.8%',  sub: 'IMF flash estimate',       col: C.red   },
+          { label: 'Sectors in Distress',    v: '6',      sub: 'vs 6 structural winners',  col: C.amber },
+          { label: 'Defense Contracts',      v: '+$180B', sub: 'New orders since Feb 27',  col: C.green },
+          { label: 'Renewables Capex',       v: '+22%',   sub: 'EU accelerated spend',     col: C.green },
+          { label: 'LNG Spot Price',         v: `€${val(live,'ttf')}/MWh`, sub: '+38% vs pre-conflict', col: C.amber },
+        ].map((m, i) => (
+          <Card key={i} style={{ padding: '12px 14px' }}>
+            <Lbl>{m.label}</Lbl>
+            <span style={{ fontSize: 22, fontWeight: 700, color: m.col, fontFamily: 'monospace' }}>{m.v}</span>
+            <div style={{ fontSize: 10, color: C.text, marginTop: 5, fontFamily: 'monospace' }}>{m.sub}</div>
+          </Card>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <Card>
+          <Lbl style={{ color: C.red }}>▼ Structural Losers — Sector Impact vs Feb 27</Lbl>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
+            {losers.map(s => (
+              <div key={s.sector}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontSize: 10, color: C.bright, fontFamily: 'monospace' }}>{s.sector}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: C.red, fontFamily: 'monospace' }}>{s.impact}%</span>
+                </div>
+                <ProgBar pct={Math.abs(s.impact)} color={C.red} />
+                <div style={{ fontSize: 9, color: C.textDim, fontFamily: 'monospace', marginTop: 3 }}>{s.detail}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <Lbl style={{ color: C.green }}>▲ Structural Winners — Sector Impact vs Feb 27</Lbl>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
+            {winners.map(s => (
+              <div key={s.sector}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontSize: 10, color: C.bright, fontFamily: 'monospace' }}>{s.sector}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>+{s.impact}%</span>
+                </div>
+                <ProgBar pct={s.impact} color={C.green} />
+                <div style={{ fontSize: 9, color: C.textDim, fontFamily: 'monospace', marginTop: 3 }}>{s.detail}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+// ─── HUMAN COST TAB ─────────────────────────────────────────
+function HumanCostTab() {
+  const countries = [
+    { name: 'Iran',    killed: '3,400+', injured: '38,000+', displaced: '750,000+', source: 'HRANA / UN OCHA', col: C.red    },
+    { name: 'Lebanon', killed: '1,500+', injured: '12,000+', displaced: '620,000+', source: 'LCRP / UNDP',     col: C.amber  },
+    { name: 'Iraq',    killed: '340+',   injured: '2,100+',  displaced: '85,000+',  source: 'IOM Iraq',        col: C.blue   },
+    { name: 'Syria',   killed: '120+',   injured: '480+',    displaced: '95,000+',  source: 'SNHR',            col: C.text   },
+  ]
+
+  const timeline = [
+    { date: 'Feb 27', event: 'Conflict begins — US strikes IRGC command nodes in western Iran' },
+    { date: 'Mar 1',  event: 'Hezbollah opens northern Israel front; 950K Lebanese civilians displaced in week 1' },
+    { date: 'Mar 4',  event: 'Iran retaliates — Haifa port struck; 42 Israeli civilians killed' },
+    { date: 'Mar 10', event: 'Humanitarian corridor proposed — rejected by Iran pending US withdrawal demand' },
+    { date: 'Mar 18', event: 'Peak escalation — South Pars strike; 1,444 killed to date (HRANA estimate)' },
+    { date: 'Mar 25', event: 'UNRWA reports 580,000 displaced in Lebanon; Jordan border overwhelmed' },
+    { date: 'Apr 1',  event: 'US agrees to partial ceasefire talks via Pakistan; fighting continues' },
+    { date: 'Apr 7',  event: 'Trump ultimatum expires — Pakistan brokered deal framework agreed' },
+    { date: 'Apr 8',  event: 'Ceasefire effective 06:00 UTC — 3,400 killed (HRANA), 800K+ displaced total' },
+    { date: 'Apr 10', event: 'Islamabad talks begin — US, Iran, Pakistan · 2-week ceasefire framework' },
+  ]
+
+  return (
+    <div>
+      <div style={{ background: C.red + '08', border: `1px solid ${C.red}25`, borderRadius: 3, padding: '10px 16px', marginBottom: 14, fontFamily: 'monospace', fontSize: 10, color: C.bright }}>
+        ⚠ All casualty figures are estimates from independent monitors. Iranian government figures are lower. HRANA is Iran's human rights news agency.
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 14 }}>
+        {[
+          { label: 'Total Killed (est.)',    v: '5,360+',   col: C.red,    sub: 'All parties, Apr 10 est.'   },
+          { label: 'Total Injured (est.)',   v: '52,000+',  col: C.red,    sub: 'Incl. indirect casualties'  },
+          { label: 'Total Displaced',        v: '1.55M+',   col: C.amber,  sub: 'IDP + cross-border refugees' },
+          { label: 'Conflict Duration',      v: '40 days',  col: C.text,   sub: 'Feb 27 → Apr 8 ceasefire'   },
+        ].map((m, i) => (
+          <Card key={i} style={{ padding: '12px 14px' }}>
+            <Lbl>{m.label}</Lbl>
+            <span style={{ fontSize: 22, fontWeight: 700, color: m.col, fontFamily: 'monospace' }}>{m.v}</span>
+            <div style={{ fontSize: 10, color: C.text, marginTop: 5, fontFamily: 'monospace' }}>{m.sub}</div>
+          </Card>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+        <Card>
+          <Lbl>Casualties by Country</Lbl>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
+            {countries.map(c => (
+              <div key={c.name} style={{ padding: '10px 12px', background: C.surfaceHi, borderRadius: 2, borderLeft: `3px solid ${c.col}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: C.white, fontFamily: 'monospace' }}>{c.name}</span>
+                  <span style={{ fontSize: 9, color: C.textDim, fontFamily: 'monospace' }}>{c.source}</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                  {[['Killed', c.killed, C.red], ['Injured', c.injured, C.amber], ['Displaced', c.displaced, C.blue]].map(([l,v,col]) => (
+                    <div key={l}>
+                      <div style={{ fontSize: 8, color: C.textDim, fontFamily: 'monospace' }}>{l}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: col, fontFamily: 'monospace' }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <Lbl>Casualties Over Time — HRANA Estimates</Lbl>
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={HUMAN_HISTORY} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id="gradK" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={C.red} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={C.red} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="d" tick={{ fill: C.textDim, fontSize: 9, fontFamily: 'monospace' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: C.textDim, fontSize: 9, fontFamily: 'monospace' }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ background: C.surfaceHi, border: `1px solid ${C.borderHi}`, fontSize: 10, fontFamily: 'monospace' }} formatter={(v, n) => [v.toLocaleString(), n === 'k' ? 'Killed' : n === 'inj' ? 'Injured' : 'Displaced']} />
+              <Area type="monotone" dataKey="k" stroke={C.red} fill="url(#gradK)" strokeWidth={2} name="k" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
+
+      <Card>
+        <Lbl>Conflict Timeline — Key Humanitarian Events</Lbl>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginTop: 8 }}>
+          {timeline.map((t, i) => (
+            <div key={i} style={{ display: 'flex', gap: 12, padding: '9px 0', borderBottom: i < timeline.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+              <span style={{ fontSize: 9, color: C.amber, fontFamily: 'monospace', minWidth: 42, paddingTop: 2, fontWeight: 700 }}>{t.date}</span>
+              <span style={{ fontSize: 10, color: C.bright, fontFamily: 'monospace', lineHeight: 1.5 }}>{t.event}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+// ─── GEOPOLITICAL TAB ───────────────────────────────────────
+function GeopoliticalTab() {
+  const alliances = [
+    { actor: 'United States',      side: 'US-LED',   role: 'Primary belligerent — air & naval strikes on IRGC; 5th Fleet + B-2 missions', col: C.blue   },
+    { actor: 'Israel',             side: 'US-LED',   role: 'Ground + air operations Lebanon front; Iron Dome; intel sharing with US',     col: C.blue   },
+    { actor: 'UK',                 side: 'US-LED',   role: 'Diplomatic support; HMS Queen Elizabeth in Arabian Sea; no direct strikes',   col: C.blue   },
+    { actor: 'Saudi Arabia',       side: 'NEUTRAL',  role: 'Refused basing rights; quiet intel cooperation with US; oil output steady',   col: C.amber  },
+    { actor: 'UAE',                side: 'NEUTRAL',  role: 'Airspace closed to combat ops; G42 AI assets at risk; evacuations ordered',   col: C.amber  },
+    { actor: 'Iran',               side: 'IRAN-LED', role: 'Primary target; IRGC + regular army; Hormuz blockade; proxy activation',     col: C.red    },
+    { actor: 'Hezbollah',          side: 'IRAN-LED', role: 'Lebanon front; 150+ rocket salvos/day at peak; ceasefire holding tenuously', col: C.red    },
+    { actor: 'Iraq (Shia militia)','side': 'IRAN-LED', role: 'Kataib Hezbollah strikes US bases; Iraq govt formally neutral',              col: C.red    },
+    { actor: 'Russia',             side: 'NEUTRAL',  role: 'Veto UN resolutions; arms supply to Iran continues; no military involvement', col: C.textDim},
+    { actor: 'China',              side: 'NEUTRAL',  role: 'Calls for restraint; continues Iran oil purchases; no military role',        col: C.textDim},
+    { actor: 'Pakistan',           side: 'MEDIATOR', role: 'Key broker — Islamabad talks host; trusted by both Tehran and Washington',   col: C.green  },
+    { actor: 'Turkey',             side: 'MEDIATOR', role: 'Humanitarian corridor offers; Erdogan shuttle diplomacy',                    col: C.green  },
+  ]
+
+  const sideCol  = { 'US-LED': C.blue, 'IRAN-LED': C.red, 'NEUTRAL': C.textDim, 'MEDIATOR': C.green }
+  const diplo = [
+    { date: 'Mar 10', event: 'UN Security Council ceasefire resolution — vetoed by US & Russia simultaneously' },
+    { date: 'Mar 22', event: 'Pakistan PM flies to Tehran — first high-level contact; framework proposed' },
+    { date: 'Mar 28', event: 'Qatar mediation attempt stalls — Hormuz reopening precondition rejected' },
+    { date: 'Apr 1',  event: 'Back-channel via Oman — US offers sanctions partial rollback; Iran demands full exit' },
+    { date: 'Apr 5',  event: 'Pakistan presents bridging proposal — phased ceasefire + nuclear talks framework' },
+    { date: 'Apr 7',  event: 'Trump 48hr ultimatum expires — Pakistan deal accepted hours before deadline' },
+    { date: 'Apr 8',  event: '✓ Ceasefire effective 06:00 UTC — 2-week renewable truce signed in Islamabad' },
+    { date: 'Apr 10', event: '✓ Islamabad talks begin — US (Rubio), Iran (Araghchi), Pakistan (Dar) delegations' },
+  ]
+
+  return (
+    <div>
+      <div style={{ background: C.blue + '10', border: `1px solid ${C.blue}30`, borderRadius: 3, padding: '10px 16px', marginBottom: 14, fontFamily: 'monospace', fontSize: 10, color: C.bright }}>
+        ◈ Islamabad talks Day 1 underway · 2-week ceasefire renewable · Nuclear framework on table · Lebanon front tenuous
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 14 }}>
+        {[
+          { label: 'Ceasefire Status',    v: 'ACTIVE',          col: C.green,  sub: 'Since Apr 8, 06:00 UTC'     },
+          { label: 'Islamabad Talks',     v: 'DAY 1',           col: C.blue,   sub: 'US · Iran · Pakistan'        },
+          { label: 'Ceasefire Duration',  v: '14 DAYS',         col: C.amber,  sub: 'Renewable · expires Apr 22'  },
+          { label: 'Lebanon Front',       v: 'FRAGILE',         col: C.amber,  sub: 'Hezbollah not bound by deal'  },
+        ].map((m, i) => (
+          <Card key={i} style={{ padding: '12px 14px' }}>
+            <Lbl>{m.label}</Lbl>
+            <span style={{ fontSize: 20, fontWeight: 700, color: m.col, fontFamily: 'monospace' }}>{m.v}</span>
+            <div style={{ fontSize: 10, color: C.text, marginTop: 5, fontFamily: 'monospace' }}>{m.sub}</div>
+          </Card>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+        <Card>
+          <Lbl>Alliance Map</Lbl>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+            {['US-LED', 'IRAN-LED', 'MEDIATOR', 'NEUTRAL'].map(side => (
+              <div key={side}>
+                <div style={{ fontSize: 9, color: sideCol[side], fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 4, marginTop: 6 }}>{side}</div>
+                {alliances.filter(a => a.side === side).map(a => (
+                  <div key={a.actor} style={{ padding: '7px 10px', background: C.surfaceHi, borderRadius: 2, marginBottom: 4, borderLeft: `2px solid ${sideCol[side]}` }}>
+                    <div style={{ fontSize: 11, color: C.white, fontFamily: 'monospace', fontWeight: 700, marginBottom: 2 }}>{a.actor}</div>
+                    <div style={{ fontSize: 9, color: C.textDim, fontFamily: 'monospace', lineHeight: 1.4 }}>{a.role}</div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <Lbl>Diplomatic Timeline</Lbl>
+          <div style={{ display: 'flex', flexDirection: 'column', marginTop: 8 }}>
+            {diplo.map((d, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, padding: '9px 0', borderBottom: i < diplo.length - 1 ? `1px solid ${C.border}` : 'none', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 9, color: C.amber, fontFamily: 'monospace', minWidth: 42, fontWeight: 700, paddingTop: 2 }}>{d.date}</span>
+                <span style={{ fontSize: 10, color: d.event.startsWith('✓') ? C.green : C.bright, fontFamily: 'monospace', lineHeight: 1.5 }}>{d.event}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
 // ─── MAIN APP SHELL ─────────────────────────────────────────
 const TABS = [
-  { id: 'overview', label: 'OVERVIEW'  },
-  { id: 'markets',  label: 'MARKETS'   },
-  { id: 'news',     label: '⟳ NEWS'    },
-  { id: 'digest',   label: '◆ DIGEST'  },
+  { id: 'overview',     label: 'OVERVIEW'      },
+  { id: 'markets',      label: 'MARKETS'       },
+  { id: 'supply',       label: 'SUPPLY CHAIN'  },
+  { id: 'ai',           label: 'AI & DATA CTR' },
+  { id: 'business',     label: 'BIZ IMPACT'    },
+  { id: 'human',        label: 'HUMAN COST'    },
+  { id: 'geopolitical', label: 'GEOPOLITICAL'  },
+  { id: 'news',         label: '⟳ NEWS'        },
+  { id: 'digest',       label: '◆ DIGEST'      },
 ]
 
 export default function App() {
@@ -288,10 +705,15 @@ export default function App() {
   const refreshAll = () => { refreshMarkets(); refreshNews() }
 
   const content = {
-    overview: <OverviewTab live={live} loading={loadMkt} />,
-    markets:  <MarketsTab  live={live} loading={loadMkt} />,
-    news:     <NewsTab     news={news} onRefresh={refreshNews} loading={loadNews} error={newsErr} />,
-    digest:   <DigestTab   live={live} />,
+    overview:     <OverviewTab        live={live} loading={loadMkt} />,
+    markets:      <MarketsTab         live={live} loading={loadMkt} />,
+    supply:       <SupplyChainTab     live={live} loading={loadMkt} />,
+    ai:           <AIDataCentersTab   />,
+    business:     <BusinessImpactTab  live={live} loading={loadMkt} />,
+    human:        <HumanCostTab       />,
+    geopolitical: <GeopoliticalTab    />,
+    news:         <NewsTab            news={news} onRefresh={refreshNews} loading={loadNews} error={newsErr} />,
+    digest:       <DigestTab          live={live} />,
   }
 
   return (
