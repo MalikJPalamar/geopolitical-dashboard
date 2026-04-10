@@ -1,0 +1,25 @@
+name: Gulf Exodus Social Listening
+
+on:
+  schedule:
+    - cron: '0 20 * * *'  # 21:00 CET / 22:00 CEST
+  workflow_dispatch:       # manual trigger
+
+jobs:
+  social-listening:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Social Listening Pipeline
+        run: |
+          RESPONSE=$(curl -s -X POST \
+            "https://cdesyawysphgtsxmvleu.supabase.co/functions/v1/social-listening" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+          echo "$RESPONSE"
+          SUCCESS=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('success', False))")
+          if [ "$SUCCESS" != "True" ]; then
+            echo "Pipeline failed"
+            exit 1
+          fi
+          echo "Score: $(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('composite_score','?'))")"
+          echo "Delta: $(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('score_delta','?'))")"
