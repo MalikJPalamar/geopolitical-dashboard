@@ -12,17 +12,11 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import Anthropic from '@anthropic-ai/sdk'
 import axios from 'axios'
-import path from 'path'
-import { fileURLToPath } from 'url'
 
 dotenv.config()
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-
 const app = express()
 const PORT = process.env.PORT || 3001
-const BASE_PATH = process.env.BASE_PATH || ''
 
 // ── Anthropic client (server-side only) ────────────────────────
 const anthropic = new Anthropic({
@@ -126,44 +120,6 @@ app.get('/api/market', async (req, res) => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// Helpers for parsing Claude responses that may interleave tool
-// calls, tool results, and text blocks when using web_search.
-// ─────────────────────────────────────────────────────────────
-function joinText(content) {
-  if (!Array.isArray(content)) return ''
-  return content
-    .filter(b => b && b.type === 'text' && typeof b.text === 'string')
-    .map(b => b.text)
-    .join('\n')
-    .trim()
-}
-
-function extractJsonArray(raw) {
-  if (!raw) return null
-  // Strip markdown code fences if present
-  const clean = raw.replace(/```(?:json|javascript|js)?\s*/gi, '').replace(/```/g, '').trim()
-  // Prefer a bare array
-  const aStart = clean.indexOf('[')
-  const aEnd   = clean.lastIndexOf(']')
-  if (aStart !== -1 && aEnd !== -1 && aEnd > aStart) {
-    try { return JSON.parse(clean.slice(aStart, aEnd + 1)) } catch {}
-  }
-  // Fall back: { items: [...] } or { data: [...] } or { results: [...] }
-  const oStart = clean.indexOf('{')
-  const oEnd   = clean.lastIndexOf('}')
-  if (oStart !== -1 && oEnd !== -1 && oEnd > oStart) {
-    try {
-      const obj = JSON.parse(clean.slice(oStart, oEnd + 1))
-      for (const k of ['items', 'data', 'results', 'headlines', 'news']) {
-        if (Array.isArray(obj?.[k])) return obj[k]
-      }
-      if (Array.isArray(obj)) return obj
-    } catch {}
-  }
-  return null
-}
-
-// ─────────────────────────────────────────────────────────────
 // ROUTE: POST /api/news
 // Calls Claude with web_search to fetch today's top conflict headlines
 // ─────────────────────────────────────────────────────────────
@@ -173,37 +129,35 @@ app.post('/api/news', async (req, res) => {
   try {
     const response = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 4096,
-      system: 'You are a geopolitical news aggregator. Use web_search to find today\'s headlines, then respond with ONLY a JSON array. Start your final message with [ and end with ]. No markdown code fences, no explanation, no preamble.',
+      max_tokens: 1000,
+      system: 'Respond with ONLY a JSON array. Start with [ and end with ]. No markdown, no explanation.',
       messages: [{
         role: 'user',
-        content: `Search the web for the 8 most significant developments today (${today}) across:
+        content: `Search for the 8 most significant developments today (${today}) across:
 - US-Iran ceasefire status and Islamabad talks
 - Strait of Hormuz shipping
 - Energy prices and markets
 - Lebanon conflict
 - Diplomatic developments
 
-After searching, respond with ONLY this JSON array (no other text):
+Return ONLY this JSON array:
 [{"time":"HH:MM","headline":"factual headline under 85 chars","source":"outlet name","category":"MILITARY|ENERGY|DIPLOMATIC|MARKETS|HUMANITARIAN","severity":"CRITICAL|HIGH|MEDIUM|LOW"}]`,
       }],
       tools: [{ type: 'web_search_20250305', name: 'web_search' }],
     })
 
-    const raw = joinText(response.content)
-    if (!raw) {
-      throw new Error(`Claude returned no text (stop_reason=${response.stop_reason}). Check web_search tool access and max_tokens.`)
-    }
+    const textBlock = response.content.filter(b => b.type === 'text').pop()
+    if (!textBlock) throw new Error('No text in Claude response')
 
-    const items = extractJsonArray(raw)
-    if (!items) {
-      throw new Error(`Could not extract JSON array from response. First 200 chars: ${raw.slice(0, 200)}`)
-    }
+    const raw = textBlock.text.replace(/```[a-z]*\s*/gi, '').replace(/```/g, '').trim()
+    const start = raw.indexOf('[')
+    const end   = raw.lastIndexOf(']')
+    if (start === -1 || end === -1) throw new Error(`No array found. Got: ${raw.slice(0, 100)}`)
 
+    const items = JSON.parse(raw.slice(start, end + 1))
     res.json({ items })
   } catch (e) {
-    console.error('[/api/news]', e)
-    res.status(500).json({ error: e.message || 'Unknown error' })
+    res.status(500).json({ error: e.message })
   }
 })
 
@@ -212,33 +166,27 @@ After searching, respond with ONLY this JSON array (no other text):
 // Generates an AI intelligence digest using live market data + web search
 // Body: { marketData: { brent, wti, vix, ... } }
 // ─────────────────────────────────────────────────────────────
-const sign = (n, fallback) => {
-  const v = Number(n ?? fallback)
-  return `${v > 0 ? '+' : ''}${v}`
-}
-
 app.post('/api/digest', async (req, res) => {
   const d = req.body?.marketData || {}
-  const hormuzOpen = d.hormuz_open !== undefined ? !!d.hormuz_open : true
 
   try {
     const response = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 4096,
-      system: 'Senior geopolitical and financial intelligence analyst. Write structured markdown briefings using ## headers. Direct and analytical — no filler, no preamble.',
+      max_tokens: 1000,
+      system: 'Senior geopolitical and financial intelligence analyst. Write structured markdown briefings. Direct and analytical — no filler.',
       messages: [{
         role: 'user',
         content: `Intelligence digest — US-Iran ceasefire, ${new Date().toLocaleDateString()}.
 
 CURRENT DATA:
 - Brent: $${d.brent ?? 96.80}/bbl | WTI: $${d.wti ?? 93.40}/bbl
-- Hormuz: ${hormuzOpen ? 'REOPENING (ceasefire)' : 'CLOSED'}
+- Hormuz: ${d.hormuz_open ?? true ? 'REOPENING (ceasefire)' : 'CLOSED'}
 - VIX: ${d.vix ?? 27.8} | Gold: $${d.gold ?? 3095}
-- Defense ETF: ${sign(d.ita_pct, 19)}% | Energy ETF: ${sign(d.xle_pct, 18)}% | Airlines: ${sign(d.jets_pct, -18)}%
+- Defense ETF: +${d.ita_pct ?? 19}% | Energy ETF: +${d.xle_pct ?? 18}% | Airlines: ${d.jets_pct ?? -18}%
 - Iran killed: ~3,400 (HRANA) | Lebanon: 1,500+
 - Islamabad talks underway
 
-Write a briefing using these exact ## headers, in this order:
+Write using these ## headers:
 ## Ceasefire Status
 ## Energy & Markets
 ## Business Impact
@@ -247,15 +195,41 @@ Write a briefing using these exact ## headers, in this order:
       tools: [{ type: 'web_search_20250305', name: 'web_search' }],
     })
 
-    const digest = joinText(response.content)
-    if (!digest) {
-      throw new Error(`Claude returned no text (stop_reason=${response.stop_reason}). Check web_search tool access and max_tokens.`)
-    }
+    const textBlock = response.content.filter(b => b.type === 'text').pop()
+    if (!textBlock) throw new Error('No text in Claude response')
 
-    res.json({ digest })
+    res.json({ digest: textBlock.text })
   } catch (e) {
-    console.error('[/api/digest]', e)
-    res.status(500).json({ error: e.message || 'Unknown error' })
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUTE: GET /api/bdi
+// Fetches latest Baltic Dry Index from FRED (Federal Reserve Economic Data)
+// Requires FRED_API_KEY in .env — free registration at https://fred.stlouisfed.org
+// Series: BALDIY (Baltic Dry Index, annual — use for trend; no daily FRED series)
+// ─────────────────────────────────────────────────────────────────────────────
+app.get('/api/bdi', async (req, res) => {
+  const fredKey = process.env.FRED_API_KEY
+  if (!fredKey) {
+    return res.status(503).json({
+      error: 'FRED_API_KEY not set',
+      hint: 'Register free at https://fred.stlouisfed.org/docs/api/api_key.html',
+      fallback: 2710,
+    })
+  }
+
+  try {
+    const url = `https://api.stlouisfed.org/fred/series/observations?series_id=BALDIY&api_key=${fredKey}&sort_order=desc&limit=5&file_type=json`
+    const r = await axios.get(url, { timeout: 8000 })
+    const obs = r.data?.observations || []
+    const latest = obs.find(o => o.value !== '.')
+    if (!latest) throw new Error('No valid BDI observations from FRED')
+    const bdi = parseFloat(latest.value)
+    res.json({ bdi, date: latest.date, source: 'FRED BALDIY', note: 'Annual average trend' })
+  } catch (e) {
+    res.json({ bdi: 2710, date: null, source: 'baseline_fallback', error: e.message })
   }
 })
 
@@ -265,24 +239,7 @@ app.get('/api/health', (req, res) => {
 })
 
 app.listen(PORT, () => {
-  console.log(`\n🛢  Iran War Intel server running on http://localhost:${PORT}`)
+  console.log(`\n🛪  Iran War Intel server running on http://localhost:${PORT}`)
   console.log(`   Model: ${MODEL}`)
   console.log(`   Anthropic key: ${process.env.ANTHROPIC_API_KEY ? '✓ found' : '✗ MISSING — set ANTHROPIC_API_KEY in .env'}\n`)
 })
-
-// ─────────────────────────────────────────────────────────────
-// PRODUCTION: Serve static files from /dist
-// ─────────────────────────────────────────────────────────────
-if (process.env.NODE_ENV === 'production') {
-  const distPath = path.join(__dirname, '../dist')
-  
-  // Serve static assets
-  app.use(BASE_PATH, express.static(distPath))
-  
-  // Handle SPA routing - send all non-API routes to index.html
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api')) {
-      res.sendFile(path.join(distPath, 'index.html'))
-    }
-  })
-}
